@@ -10,43 +10,47 @@ class Command(BaseCommand):
         # ======================
         # ADMIN
         # ======================
-        if not User.objects.filter(username='admin').exists():
-            admin_user = User.objects.create_user(
-                username='admin',
-                email='admin@correo.com',
-                password='admin123'
-            )
+        admin_user, created = User.objects.get_or_create(
+            username='admin',
+            defaults={
+                'email': 'admin@correo.com'
+            }
+        )
+
+        if created:
+            admin_user.set_password('admin123')
             admin_user.is_staff = True
             admin_user.is_superuser = True
             admin_user.save()
-
-            Perfil.objects.create(
-                usuario=admin_user,
-                rol='administrador'
-            )
-
-            self.stdout.write(self.style.SUCCESS('✔ Admin creado con perfil'))
+            self.stdout.write(self.style.SUCCESS('✔ Admin creado'))
         else:
             self.stdout.write('Admin ya existe')
+
+        Perfil.objects.get_or_create(
+            usuario=admin_user,
+            defaults={'rol': 'administrador'}
+        )
 
         # ======================
         # USUARIO NORMAL
         # ======================
-        if not User.objects.filter(username='usuario').exists():
-            normal_user = User.objects.create_user(
-                username='usuario',
-                email='user@correo.com',
-                password='user123'
-            )
+        normal_user, created = User.objects.get_or_create(
+            username='usuario',
+            defaults={
+                'email': 'user@correo.com'
+            }
+        )
+
+        if created:
+            normal_user.set_password('user123')
             normal_user.save()
-
-            Perfil.objects.create(
-                usuario=normal_user,
-                rol='usuario'
-            )
-
-            self.stdout.write(self.style.SUCCESS('✔ Usuario creado con perfil'))
+            self.stdout.write(self.style.SUCCESS('✔ Usuario creado'))
         else:
             self.stdout.write('Usuario ya existe')
+
+        Perfil.objects.get_or_create(
+            usuario=normal_user,
+            defaults={'rol': 'usuario'}
+        )
 
         self.stdout.write(self.style.SUCCESS('🔥 Seed ejecutado correctamente'))
