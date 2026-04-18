@@ -1,0 +1,661 @@
+{% extends 'base.html' %}
+{% block title %}Ruta Segura - Vías Seguras{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+    .ruta-layout { display: grid; grid-template-columns: 360px 1fr; gap: 1.25rem; align-items: start; }
+    @media (max-width:900px) { .ruta-layout { grid-template-columns: 1fr; } }
+    #mapa-ruta { height: 580px; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); z-index: 0; }
+    .panel { background: white; border-radius: 20px; padding: 1.5rem; box-shadow: 0 2px 16px rgba(0,0,0,0.06); }
+    .input-geo { border-radius: 12px; border: 2px solid #e5e7eb; padding: 10px 14px 10px 42px; font-size: .9rem; width: 100%; transition: border-color .2s; }
+    .input-geo:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+    .geo-wrap { position: relative; }
+    .geo-wrap .geo-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); font-size: 1rem; pointer-events: none; }
+    .geo-suggestions { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: white; border: 1.5px solid #e5e7eb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 9999; max-height: 200px; overflow-y: auto; display: none; }
+    .geo-suggestions.visible { display: block; }
+    .geo-suggestion { padding: 9px 14px; cursor: pointer; font-size: .85rem; border-bottom: 1px solid #f3f4f6; }
+    .geo-suggestion:last-child { border-bottom: none; }
+    .geo-suggestion:hover { background: #eff6ff; }
+    .risk-badge { border-radius: 30px; padding: 5px 14px; font-weight: 700; font-size: .8rem; color: white; }
+    .risk-safe   { background: #22c55e; }
+    .risk-medium { background: #f59e0b; }
+    .risk-high   { background: #ef4444; }
+    .risk-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: .85rem; }
+    .risk-row:last-child { border-bottom: none; }
+    .step-dot { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .8rem; flex-shrink: 0; }
+    .leaflet-popup-content-wrapper { border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); border: none; padding: 0; overflow: hidden; }
+    .leaflet-popup-content { margin: 0; width: 220px !important; }
+    .popup-h { padding: 9px 14px 7px; font-weight: 700; font-size: .85rem; color: white; }
+    .popup-b { padding: 9px 14px 12px; font-size: .8rem; color: #374151; }
+    .route-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: .78rem; font-weight: 600; }
+    .legend-seg { display: flex; align-items: center; gap: 5px; }
+    .seg-line { width: 24px; height: 4px; border-radius: 2px; display: inline-block; }
+    #estado-ruta { min-height: 48px; }
+    .spinner-ruta { display: inline-block; width: 22px; height: 22px; border: 3px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .accidente-nearby { background: #fef2f2; border-radius: 10px; padding: 8px 12px; font-size: .8rem; margin-bottom: 6px; border-left: 3px solid; }
+    .nearby-alta  { border-color: #ef4444; }
+    .nearby-media { border-color: #f59e0b; }
+    .nearby-baja  { border-color: #22c55e; }
+    .swap-btn { background: none; border: 2px solid #e5e7eb; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .15s; }
+    .swap-btn:hover { background: #eff6ff; border-color: #2563eb; }
+    /* Botones "elegir en mapa" */
+    .btn-pick { border-radius: 20px; font-size: .78rem; padding: 3px 10px; border-width: 1.5px; font-weight: 600; transition: all .15s; }
+    .btn-pick.activo-origen  { background: #22c55e; color: white; border-color: #22c55e; }
+    .btn-pick.activo-destino { background: #ef4444; color: white; border-color: #ef4444; }
+    /* Input con borde activo */
+    .input-geo.picking-origen  { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.15); }
+    .input-geo.picking-destino { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.15); }
+    /* Banner flotante sobre el mapa */
+    #pick-banner {
+        position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+        z-index: 1000; border-radius: 30px; padding: 8px 20px;
+        font-size: .85rem; font-weight: 600; color: white;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.22); white-space: nowrap;
+        pointer-events: none; display: none;
+    }
+    /* Cursor del mapa en modo selección */
+    .mapa-pick-origen  { cursor: crosshair !important; }
+    .mapa-pick-destino { cursor: crosshair !important; }
+    /* Wrapper relativo para que el banner sea absoluto sobre el mapa */
+    .mapa-wrapper { position: relative; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <h1 class="fw-bold mb-1"><i class="bi bi-signpost-split me-3"></i>Ruta Segura</h1>
+        <p class="mb-0 opacity-75">Calcula tu ruta evitando zonas con alta incidencia de accidentes</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="ruta-layout">
+
+        <!-- ── Panel izquierdo ────────────────────────────────────────────── -->
+        <div>
+            <!-- Formulario de origen/destino -->
+            <div class="panel mb-3">
+                <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-map me-2"></i>Planificar ruta</h6>
+
+                <!-- ORIGEN -->
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold text-muted text-uppercase mb-1">
+                        <i class="bi bi-circle-fill text-success me-1" style="font-size:.6rem;"></i>Origen
+                    </label>
+                    <div class="geo-wrap">
+                        <i class="bi bi-geo-alt geo-icon text-success"></i>
+                        <input type="text" id="input-origen" class="input-geo" placeholder="Escribe o selecciona en el mapa...">
+                        <div class="geo-suggestions" id="sug-origen"></div>
+                    </div>
+                    <div class="d-flex gap-2 mt-2">
+                        <button class="btn btn-outline-success btn-pick flex-fill" id="btn-pick-origen">
+                            <i class="bi bi-cursor-fill me-1"></i>Elegir en el mapa
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" id="btn-usar-ubicacion-ruta" title="Usar mi ubicación GPS">
+                            <i class="bi bi-crosshair2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Swap button -->
+                <div class="d-flex align-items-center justify-content-center my-2">
+                    <button class="swap-btn" id="btn-swap" title="Intercambiar origen y destino">
+                        <i class="bi bi-arrow-down-up text-primary"></i>
+                    </button>
+                </div>
+
+                <!-- DESTINO -->
+                <div class="mb-4">
+                    <label class="form-label small fw-semibold text-muted text-uppercase mb-1">
+                        <i class="bi bi-geo-alt-fill text-danger me-1" style="font-size:.8rem;"></i>Destino
+                    </label>
+                    <div class="geo-wrap">
+                        <i class="bi bi-geo-alt-fill geo-icon text-danger"></i>
+                        <input type="text" id="input-destino" class="input-geo" placeholder="Escribe o selecciona en el mapa...">
+                        <div class="geo-suggestions" id="sug-destino"></div>
+                    </div>
+                    <div class="mt-2">
+                        <button class="btn btn-outline-danger btn-pick w-100" id="btn-pick-destino">
+                            <i class="bi bi-cursor-fill me-1"></i>Elegir en el mapa
+                        </button>
+                    </div>
+                </div>
+
+                <button id="btn-calcular" class="btn btn-primary w-100 fw-semibold" style="border-radius:12px;padding:12px;">
+                    <i class="bi bi-route me-2"></i>Calcular ruta segura
+                </button>
+
+                <div id="estado-ruta" class="text-center text-muted small mt-3"></div>
+            </div>
+
+            <!-- Resumen de ruta -->
+            <div class="panel mb-3 d-none" id="panel-resumen">
+                <h6 class="fw-bold mb-3"><i class="bi bi-info-circle text-primary me-2"></i>Resumen de ruta</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="text-center p-2 rounded-3" style="background:#eff6ff;">
+                            <div class="fw-bold fs-5 text-primary" id="resumen-distancia">—</div>
+                            <div class="small text-muted">Distancia</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center p-2 rounded-3" style="background:#f0fdf4;">
+                            <div class="fw-bold fs-5 text-success" id="resumen-tiempo">—</div>
+                            <div class="small text-muted">Tiempo est.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="fw-semibold small">Nivel de riesgo general</span>
+                    <span id="badge-riesgo-global" class="risk-badge risk-safe">Calculando...</span>
+                </div>
+                <div class="route-legend mt-2 pt-2 border-top">
+                    <div class="legend-seg"><span class="seg-line" style="background:#22c55e;"></span>Seguro</div>
+                    <div class="legend-seg"><span class="seg-line" style="background:#f59e0b;"></span>Precaución</div>
+                    <div class="legend-seg"><span class="seg-line" style="background:#ef4444;"></span>Peligroso</div>
+                </div>
+            </div>
+
+            <!-- Accidentes cercanos -->
+            <div class="panel d-none" id="panel-accidentes">
+                <h6 class="fw-bold mb-3">
+                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>Accidentes en la ruta
+                    <span id="count-cercanos" class="badge bg-danger ms-1 small">0</span>
+                </h6>
+                <div id="lista-cercanos"></div>
+                <div id="msg-seguro" class="text-center py-3 d-none">
+                    <i class="bi bi-shield-check text-success fs-3 d-block mb-1"></i>
+                    <span class="text-success fw-semibold">Ruta sin accidentes reportados</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Mapa ────────────────────────────────────────────────────────── -->
+        <div class="panel p-2">
+            <div class="mapa-wrapper">
+                <div id="mapa-ruta"></div>
+                <!-- Banner flotante modo selección -->
+                <div id="pick-banner">
+                    <i class="bi bi-cursor-fill me-2"></i>
+                    <span id="pick-banner-txt">Haz clic en el mapa para seleccionar</span>
+                    <span style="opacity:.7;margin-left:10px;font-size:.75rem;">· Esc para cancelar</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function () {
+'use strict';
+
+// ── Mapa ──────────────────────────────────────────────────────────────────
+const mapa = L.map('mapa-ruta', { zoomControl: true }).setView([4.6500, -74.0800], 11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: 'abcd', maxZoom: 19,
+}).addTo(mapa);
+
+// ── Configuración ─────────────────────────────────────────────────────────
+const CFG = {
+    baja:  { color: '#22c55e', dark: '#16a34a', label: 'Baja',  r: 10 },
+    media: { color: '#f59e0b', dark: '#d97706', label: 'Media', r: 12 },
+    alta:  { color: '#ef4444', dark: '#dc2626', label: 'Alta',  r: 14 },
+};
+const RADIO_RIESGO = 400; // metros: accidente "toca" la ruta si está a menos de esto
+const SEG_PUNTOS   = 6;   // cuántos puntos de la polilínea forman un "segmento" de análisis
+
+// ── Estado ────────────────────────────────────────────────────────────────
+let capasRuta = [];
+let capasAccidentes = [];
+let marcadorOrigen = null, marcadorDestino = null;
+let origenLL = null, destinoLL = null;
+let accidentesData = [];
+
+// ── Utilidades ────────────────────────────────────────────────────────────
+const estado = document.getElementById('estado-ruta');
+function setEstado(html) { estado.innerHTML = html; }
+
+function formatDist(m) {
+    return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m';
+}
+function formatTiempo(s) {
+    const m = Math.round(s / 60);
+    return m < 60 ? `${m} min` : `${Math.floor(m/60)}h ${m%60}min`;
+}
+
+// Distancia punto a segmento (Haversine aproximado en lat/lng)
+function distPuntoSegmento(p, a, b) {
+    // Conversión simple a metros (aproximada)
+    const R = 111320;
+    const dx = (b[1] - a[1]) * Math.cos(a[0] * Math.PI / 180) * R;
+    const dy = (b[0] - a[0]) * R;
+    const px = (p.lng - a[1]) * Math.cos(a[0] * Math.PI / 180) * R;
+    const py = (p.lat - a[0]) * R;
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) return Math.sqrt(px * px + py * py);
+    let t = Math.max(0, Math.min(1, (px * dx + py * dy) / len2));
+    const rx = px - t * dx, ry = py - t * dy;
+    return Math.sqrt(rx * rx + ry * ry);
+}
+
+function distPuntoPolilinea(p, coords) {
+    let minD = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const d = distPuntoSegmento(p, coords[i], coords[i + 1]);
+        if (d < minD) minD = d;
+    }
+    return minD;
+}
+
+function limpiarCapas(lista) { lista.forEach(l => mapa.removeLayer(l)); lista.length = 0; }
+
+// ── Pick mode (selección de puntos en el mapa) ────────────────────────────
+const mapEl2   = document.getElementById('mapa-ruta');
+const banner   = document.getElementById('pick-banner');
+const bannerTx = document.getElementById('pick-banner-txt');
+let modoSeleccion = null; // null | 'origen' | 'destino'
+
+function activarPick(tipo) {
+    modoSeleccion = tipo;
+    // Estilos visuales
+    banner.style.display  = 'block';
+    banner.style.background = tipo === 'origen' ? '#16a34a' : '#dc2626';
+    bannerTx.textContent  = tipo === 'origen'
+        ? 'Haz clic en el mapa para fijar el ORIGEN'
+        : 'Haz clic en el mapa para fijar el DESTINO';
+    mapEl2.style.cursor   = 'crosshair';
+
+    // Resaltar input activo
+    document.getElementById('input-origen').classList.toggle('picking-origen',  tipo === 'origen');
+    document.getElementById('input-destino').classList.toggle('picking-destino', tipo === 'destino');
+
+    // Botones activos
+    document.getElementById('btn-pick-origen').classList.toggle('activo-origen',   tipo === 'origen');
+    document.getElementById('btn-pick-destino').classList.toggle('activo-destino', tipo === 'destino');
+}
+
+function cancelarPick() {
+    modoSeleccion = null;
+    banner.style.display = 'none';
+    mapEl2.style.cursor  = '';
+    document.getElementById('input-origen').classList.remove('picking-origen');
+    document.getElementById('input-destino').classList.remove('picking-destino');
+    document.getElementById('btn-pick-origen').classList.remove('activo-origen');
+    document.getElementById('btn-pick-destino').classList.remove('activo-destino');
+}
+
+async function geocodificacionInversa(lat, lng) {
+    try {
+        const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=es`
+        );
+        const d = await r.json();
+        return d.display_name
+            ? d.display_name.split(',').slice(0, 3).join(', ')
+            : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    } catch (_) {
+        return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
+}
+
+// Tecla Escape cancela el modo
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cancelarPick(); });
+
+// Botones "Elegir en el mapa"
+document.getElementById('btn-pick-origen').addEventListener('click', () => {
+    if (modoSeleccion === 'origen') { cancelarPick(); return; }
+    activarPick('origen');
+});
+document.getElementById('btn-pick-destino').addEventListener('click', () => {
+    if (modoSeleccion === 'destino') { cancelarPick(); return; }
+    activarPick('destino');
+});
+
+// Click en el mapa — se maneja en el listener global de Leaflet (ver abajo)
+
+// ── Geocodificación (Nominatim) ───────────────────────────────────────────
+async function geocodificar(texto, bbox = null) {
+    let url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&accept-language=es&q=${encodeURIComponent(texto)}`;
+    if (bbox) url += `&viewbox=${bbox}&bounded=0`;
+    const r = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    return r.json();
+}
+
+function setupGeocoder(inputId, sugId, onSelect) {
+    const inp = document.getElementById(inputId);
+    const sug = document.getElementById(sugId);
+    let timer = null;
+
+    inp.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = inp.value.trim();
+        if (q.length < 3) { sug.classList.remove('visible'); return; }
+        timer = setTimeout(async () => {
+            try {
+                const res = await geocodificar(q);
+                sug.innerHTML = '';
+                if (!res.length) { sug.classList.remove('visible'); return; }
+                res.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = 'geo-suggestion';
+                    div.textContent = r.display_name;
+                    div.addEventListener('click', () => {
+                        inp.value = r.display_name.split(',').slice(0, 3).join(', ');
+                        sug.classList.remove('visible');
+                        onSelect({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name });
+                    });
+                    sug.appendChild(div);
+                });
+                sug.classList.add('visible');
+            } catch (_) {}
+        }, 350);
+    });
+
+    document.addEventListener('click', e => {
+        if (!inp.contains(e.target) && !sug.contains(e.target)) sug.classList.remove('visible');
+    });
+}
+
+// ── Marcadores inicio/fin ─────────────────────────────────────────────────
+function iconPin(color, letra) {
+    return L.divIcon({
+        html: `<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;background:${color};
+               border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,0.25);
+               display:flex;align-items:center;justify-content:center;
+               color:white;font-weight:800;font-size:.85rem;transform:rotate(-45deg);">
+                   <span style="transform:rotate(45deg)">${letra}</span>
+               </div>`,
+        iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32], className: '',
+    });
+}
+
+setupGeocoder('input-origen', 'sug-origen', (ll) => {
+    origenLL = ll;
+    if (marcadorOrigen) mapa.removeLayer(marcadorOrigen);
+    marcadorOrigen = L.marker([ll.lat, ll.lng], { icon: iconPin('#22c55e', 'A') }).addTo(mapa)
+        .bindTooltip('Origen', { direction: 'top' });
+    mapa.setView([ll.lat, ll.lng], 14, { animate: true });
+});
+
+setupGeocoder('input-destino', 'sug-destino', (ll) => {
+    destinoLL = ll;
+    if (marcadorDestino) mapa.removeLayer(marcadorDestino);
+    marcadorDestino = L.marker([ll.lat, ll.lng], { icon: iconPin('#ef4444', 'B') }).addTo(mapa)
+        .bindTooltip('Destino', { direction: 'top' });
+    mapa.setView([ll.lat, ll.lng], 14, { animate: true });
+});
+
+// ── Swap origen ↔ destino ─────────────────────────────────────────────────
+document.getElementById('btn-swap').addEventListener('click', () => {
+    const io = document.getElementById('input-origen');
+    const id = document.getElementById('input-destino');
+    [io.value, id.value] = [id.value, io.value];
+    [origenLL,  destinoLL] = [destinoLL,  origenLL];
+    [marcadorOrigen, marcadorDestino] = [marcadorDestino, marcadorOrigen];
+    if (marcadorOrigen) marcadorOrigen.setIcon(iconPin('#22c55e', 'A')).bindTooltip('Origen', { direction: 'top' });
+    if (marcadorDestino) marcadorDestino.setIcon(iconPin('#ef4444', 'B')).bindTooltip('Destino', { direction: 'top' });
+});
+
+// ── Geolocalización del usuario ───────────────────────────────────────────
+document.getElementById('btn-usar-ubicacion-ruta').addEventListener('click', function () {
+    if (!navigator.geolocation) { alert('Geolocalización no disponible.'); return; }
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Obteniendo...';
+    this.disabled = true;
+    const btn = this;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        origenLL = { lat, lng };
+        // Geocodificación inversa
+        try {
+            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=es`);
+            const d = await r.json();
+            document.getElementById('input-origen').value = (d.display_name || '').split(',').slice(0, 3).join(', ');
+        } catch (_) { document.getElementById('input-origen').value = `${lat.toFixed(5)}, ${lng.toFixed(5)}`; }
+        if (marcadorOrigen) mapa.removeLayer(marcadorOrigen);
+        marcadorOrigen = L.marker([lat, lng], { icon: iconPin('#22c55e', 'A') }).addTo(mapa)
+            .bindTooltip('Origen (tu ubicación)', { direction: 'top' });
+        mapa.setView([lat, lng], 14, { animate: true });
+        btn.innerHTML = '<i class="bi bi-crosshair2"></i><span>Usar mi ubicación</span>';
+        btn.disabled = false;
+    }, () => {
+        alert('No se pudo obtener la ubicación.');
+        btn.innerHTML = '<i class="bi bi-crosshair2"></i><span>Usar mi ubicación</span>';
+        btn.disabled = false;
+    }, { timeout: 10000 });
+});
+
+// ── Carga inicial de accidentes ───────────────────────────────────────────
+fetch('/mapa/datos/')
+    .then(r => r.json())
+    .then(({ accidentes }) => {
+        accidentesData = accidentes;
+        // Mostrar accidentes como marcadores pequeños en el mapa
+        accidentes.forEach(a => {
+            const c = CFG[a.gravedad] || CFG.media;
+            const mk = L.circleMarker([a.lat, a.lng], {
+                radius: c.r - 2, color: c.dark, weight: 2,
+                fillColor: c.color, fillOpacity: 0.75, interactive: true,
+            }).addTo(mapa);
+            mk.bindTooltip(
+                `<strong>${a.titulo}</strong><br><span style="font-size:.8rem;color:${c.color};">● ${c.label}</span>`,
+                { direction: 'top', opacity: .95 }
+            );
+            capasAccidentes.push(mk);
+        });
+    })
+    .catch(() => {});
+
+// ── Calcular ruta ─────────────────────────────────────────────────────────
+document.getElementById('btn-calcular').addEventListener('click', calcularRuta);
+
+async function calcularRuta() {
+    // Validar campos si no hay coords seleccionados, intenta geocodificar
+    if (!origenLL) {
+        const q = document.getElementById('input-origen').value.trim();
+        if (!q) { setEstado('<span class="text-danger">Ingresa un punto de origen.</span>'); return; }
+        setEstado('<span class="spinner-ruta"></span> Buscando origen...');
+        try {
+            const res = await geocodificar(q);
+            if (!res.length) { setEstado('<span class="text-danger">No se encontró el origen. Elige de la lista.</span>'); return; }
+            origenLL = { lat: parseFloat(res[0].lat), lng: parseFloat(res[0].lon) };
+            document.getElementById('input-origen').value = res[0].display_name.split(',').slice(0,3).join(', ');
+        } catch (_) { setEstado('<span class="text-danger">Error al buscar origen.</span>'); return; }
+    }
+    if (!destinoLL) {
+        const q = document.getElementById('input-destino').value.trim();
+        if (!q) { setEstado('<span class="text-danger">Ingresa un punto de destino.</span>'); return; }
+        setEstado('<span class="spinner-ruta"></span> Buscando destino...');
+        try {
+            const res = await geocodificar(q);
+            if (!res.length) { setEstado('<span class="text-danger">No se encontró el destino. Elige de la lista.</span>'); return; }
+            destinoLL = { lat: parseFloat(res[0].lat), lng: parseFloat(res[0].lon) };
+            document.getElementById('input-destino').value = res[0].display_name.split(',').slice(0,3).join(', ');
+        } catch (_) { setEstado('<span class="text-danger">Error al buscar destino.</span>'); return; }
+    }
+
+    setEstado('<span class="spinner-ruta"></span> Calculando ruta...');
+    limpiarCapas(capasRuta);
+
+    // Colocar/actualizar marcadores
+    if (marcadorOrigen) mapa.removeLayer(marcadorOrigen);
+    if (marcadorDestino) mapa.removeLayer(marcadorDestino);
+    marcadorOrigen  = L.marker([origenLL.lat, origenLL.lng], { icon: iconPin('#22c55e', 'A') }).addTo(mapa).bindTooltip('Origen', { direction: 'top' });
+    marcadorDestino = L.marker([destinoLL.lat, destinoLL.lng], { icon: iconPin('#ef4444', 'B') }).addTo(mapa).bindTooltip('Destino', { direction: 'top' });
+
+    try {
+        const url = `https://router.project-osrm.org/route/v1/driving/` +
+            `${origenLL.lng},${origenLL.lat};${destinoLL.lng},${destinoLL.lat}` +
+            `?overview=full&geometries=geojson&steps=false`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.code !== 'Ok' || !data.routes.length) {
+            setEstado('<span class="text-danger">No se encontró ruta entre los puntos.</span>');
+            return;
+        }
+
+        const ruta  = data.routes[0];
+        const coords = ruta.geometry.coordinates.map(c => [c[1], c[0]]); // [lat, lng]
+
+        // ── Análisis de riesgo por segmento ─────────────────────────────────
+        const segmentos = [];
+        for (let i = 0; i < coords.length - 1; i += SEG_PUNTOS) {
+            const fin = Math.min(i + SEG_PUNTOS + 1, coords.length);
+            const tramo = coords.slice(i, fin);
+            if (tramo.length < 2) continue;
+
+            let riesgo = 'baja'; // safe por defecto
+            const cercanosTramo = [];
+
+            accidentesData.forEach(a => {
+                const dist = distPuntoPolilinea(a, tramo);
+                if (dist <= RADIO_RIESGO) {
+                    cercanosTramo.push({ ...a, dist: Math.round(dist) });
+                    if (a.gravedad === 'alta') riesgo = 'alta';
+                    else if (a.gravedad === 'media' && riesgo !== 'alta') riesgo = 'media';
+                }
+            });
+
+            segmentos.push({ tramo, riesgo, cercanos: cercanosTramo });
+        }
+
+        // ── Dibujar segmentos coloreados ─────────────────────────────────────
+        const COLOR_TRAMO = { alta: '#ef4444', media: '#f59e0b', baja: '#22c55e' };
+        const PESO_TRAMO  = { alta: 7, media: 6, baja: 5 };
+
+        segmentos.forEach(seg => {
+            const col = COLOR_TRAMO[seg.riesgo];
+            // Sombra/glow
+            const sombra = L.polyline(seg.tramo, {
+                color: col, weight: PESO_TRAMO[seg.riesgo] + 5,
+                opacity: 0.18, lineCap: 'round', lineJoin: 'round',
+            }).addTo(mapa);
+            // Línea principal
+            const linea = L.polyline(seg.tramo, {
+                color: col, weight: PESO_TRAMO[seg.riesgo],
+                opacity: 0.92, lineCap: 'round', lineJoin: 'round',
+            }).addTo(mapa);
+            capasRuta.push(sombra, linea);
+        });
+
+        // ── Resumen de distancia y tiempo ────────────────────────────────────
+        document.getElementById('resumen-distancia').textContent = formatDist(ruta.distance);
+        document.getElementById('resumen-tiempo').textContent    = formatTiempo(ruta.duration);
+
+        // ── Riesgo global ────────────────────────────────────────────────────
+        const tieneAlta  = segmentos.some(s => s.riesgo === 'alta');
+        const tieneMedia = segmentos.some(s => s.riesgo === 'media');
+        const badge = document.getElementById('badge-riesgo-global');
+        if (tieneAlta) {
+            badge.textContent = '🔴 Riesgo alto'; badge.className = 'risk-badge risk-high';
+        } else if (tieneMedia) {
+            badge.textContent = '🟡 Riesgo medio'; badge.className = 'risk-badge risk-medium';
+        } else {
+            badge.textContent = '🟢 Ruta segura'; badge.className = 'risk-badge risk-safe';
+        }
+
+        // ── Lista de accidentes cercanos ─────────────────────────────────────
+        const todos = [];
+        const vistos = new Set();
+        segmentos.forEach(s => s.cercanos.forEach(a => {
+            if (!vistos.has(a.id)) { vistos.add(a.id); todos.push(a); }
+        }));
+        todos.sort((a, b) => ({ alta: 3, media: 2, baja: 1 }[b.gravedad] || 0) - ({ alta: 3, media: 2, baja: 1 }[a.gravedad] || 0));
+
+        const listaCont = document.getElementById('lista-cercanos');
+        const msgSeg = document.getElementById('msg-seguro');
+        document.getElementById('count-cercanos').textContent = todos.length;
+        listaCont.innerHTML = '';
+
+        if (!todos.length) {
+            msgSeg.classList.remove('d-none');
+        } else {
+            msgSeg.classList.add('d-none');
+            todos.slice(0, 8).forEach(a => {
+                const c = CFG[a.gravedad] || CFG.media;
+                const div = document.createElement('div');
+                div.className = `accidente-nearby nearby-${a.gravedad}`;
+                div.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <span class="fw-semibold" style="color:${c.color};">● ${a.titulo}</span>
+                        <span class="text-muted" style="font-size:.72rem;">${a.dist}m</span>
+                    </div>
+                    <div class="text-muted" style="font-size:.75rem;">${a.ubicacion}</div>
+                `;
+                div.style.cursor = 'pointer';
+                div.addEventListener('click', () => mapa.setView([a.lat, a.lng], 16, { animate: true }));
+                listaCont.appendChild(div);
+            });
+            if (todos.length > 8) {
+                listaCont.insertAdjacentHTML('beforeend',
+                    `<div class="text-center text-muted small mt-1">…y ${todos.length - 8} más</div>`);
+            }
+        }
+
+        // ── Mostrar paneles ──────────────────────────────────────────────────
+        document.getElementById('panel-resumen').classList.remove('d-none');
+        document.getElementById('panel-accidentes').classList.remove('d-none');
+
+        // Ajustar vista al bounds de la ruta
+        const bounds = L.latLngBounds(coords);
+        mapa.fitBounds(bounds.pad(0.15));
+
+        setEstado('<i class="bi bi-check-circle-fill text-success me-1"></i>Ruta calculada correctamente.');
+    } catch (err) {
+        console.error(err);
+        setEstado('<span class="text-danger">Error al conectar con el servicio de rutas. Verifica tu conexión.</span>');
+    }
+}
+
+// ── Click en el mapa: pick mode ───────────────────────────────────────────
+mapa.on('click', async function (e) {
+    if (!modoSeleccion) return;
+
+    const { lat, lng } = e.latlng;
+    const tipo = modoSeleccion;
+    cancelarPick();
+
+    // Feedback inmediato: marcador temporal pulsante
+    const tmpIcon = L.divIcon({
+        html: `<div style="width:20px;height:20px;border-radius:50%;background:${tipo==='origen'?'#22c55e':'#ef4444'};
+               border:3px solid white;box-shadow:0 0 0 6px rgba(0,0,0,.12);
+               animation:spin .8s linear infinite;"></div>`,
+        iconSize:[20,20], iconAnchor:[10,10], className:'',
+    });
+    const tmpMk = L.marker([lat,lng],{icon:tmpIcon,interactive:false}).addTo(mapa);
+
+    // Reverse geocoding
+    const direccion = await geocodificacionInversa(lat, lng);
+    mapa.removeLayer(tmpMk);
+
+    if (tipo === 'origen') {
+        origenLL = { lat, lng };
+        document.getElementById('input-origen').value = direccion;
+        if (marcadorOrigen) mapa.removeLayer(marcadorOrigen);
+        marcadorOrigen = L.marker([lat, lng], { icon: iconPin('#22c55e', 'A') })
+            .addTo(mapa).bindTooltip('Origen', { direction: 'top' }).openTooltip();
+    } else {
+        destinoLL = { lat, lng };
+        document.getElementById('input-destino').value = direccion;
+        if (marcadorDestino) mapa.removeLayer(marcadorDestino);
+        marcadorDestino = L.marker([lat, lng], { icon: iconPin('#ef4444', 'B') })
+            .addTo(mapa).bindTooltip('Destino', { direction: 'top' }).openTooltip();
+    }
+
+    // Si ambos puntos están listos, ofrecer calcular automáticamente
+    if (origenLL && destinoLL) {
+        setEstado('<i class="bi bi-check2-circle text-success me-1"></i>Origen y destino listos. Pulsa "Calcular ruta segura".');
+    }
+});
+
+})();
+</script>
+{% endblock %}

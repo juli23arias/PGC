@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Normas de Tránsito - Vías Seguras{% endblock %}
+
+{% block extra_css %}
+<style>
+    .norma-card { border-radius:14px; border:none; box-shadow:0 2px 12px rgba(0,0,0,0.07); transition:transform .18s,box-shadow .18s; cursor:pointer; }
+    .norma-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,0.13); }
+    .norma-icon { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0; }
+    #buscador-normas { border-radius:30px; border:2px solid #e5e7eb; padding:10px 20px; font-size:1rem; transition:border-color .2s; }
+    #buscador-normas:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); outline:none; }
+    .tab-btn { border-radius:30px; padding:10px 24px; font-weight:600; border:2px solid #e5e7eb; background:white; color:#6b7280; cursor:pointer; transition:all .2s; }
+    .tab-btn.activo { background:#2563eb; color:white; border-color:#2563eb; box-shadow:0 4px 14px rgba(37,99,235,.3); }
+    .categoria-pill { cursor:pointer; border-radius:30px; padding:6px 16px; font-size:.82rem; font-weight:600; border:2px solid transparent; transition:all .15s; }
+    .categoria-pill.activa { border-color:currentColor; background:rgba(37,99,235,.08); }
+    .norma-hidden { display:none !important; }
+    /* Estilo para el Código Nacional */
+    .codigo-section { background:white; border-radius:20px; padding:2rem; box-shadow:0 2px 16px rgba(0,0,0,.06); }
+    .titulo-ley { background:linear-gradient(135deg,#1a3a5c,#2563eb); color:white; border-radius:16px; padding:2rem; margin-bottom:2rem; }
+    .capitulo { border-left:4px solid #2563eb; padding-left:1.5rem; margin-bottom:2rem; }
+    .capitulo h5 { color:#1a3a5c; font-weight:700; margin-bottom:1rem; }
+    .articulo { background:#f8fafc; border-radius:10px; padding:1rem 1.2rem; margin-bottom:.75rem; border-left:3px solid; }
+    .articulo-velocidad { border-color:#ef4444; }
+    .articulo-senales { border-color:#2563eb; }
+    .articulo-alcoholemia { border-color:#f59e0b; }
+    .articulo-peatones { border-color:#22c55e; }
+    .articulo-general { border-color:#6b7280; }
+    .art-num { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#2563eb; }
+    #buscador-codigo { border:2px solid #e5e7eb; border-radius:30px; padding:8px 18px; }
+    #buscador-codigo:focus { outline:none; border-color:#2563eb; }
+    .articulo.oculto { display:none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <h1 class="fw-bold mb-1"><i class="bi bi-book-half me-3"></i>Normas de Tránsito</h1>
+                <p class="mb-0 opacity-75">Código Nacional de Tránsito de Colombia — Ley 769 de 2002</p>
+            </div>
+            {% if user.is_authenticated %}{% if user.perfil.es_administrador %}
+            <a href="/normas/norma/nueva/" class="btn btn-warning fw-semibold"><i class="bi bi-plus-circle me-2"></i>Agregar norma</a>
+            {% endif %}{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="d-flex gap-2 mb-4 flex-wrap">
+        <button class="tab-btn activo" id="tab-normas" onclick="mostrarTab('normas')"><i class="bi bi-collection me-2"></i>Normas del sistema</button>
+        <button class="tab-btn" id="tab-codigo" onclick="mostrarTab('codigo')"><i class="bi bi-file-earmark-text me-2"></i>Código Nacional de Tránsito</button>
+    </div>
+
+    <!-- TAB 1: NORMAS DEL SISTEMA -->
+    <div id="seccion-normas">
+        <div class="mb-4 position-relative">
+            <i class="bi bi-search position-absolute" style="left:18px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:1.1rem;"></i>
+            <input type="text" id="buscador-normas" class="form-control w-100" style="padding-left:46px;" placeholder="Buscar por título, artículo o descripción...">
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-4 align-items-center">
+            <span class="text-muted small fw-semibold me-1">Categoría:</span>
+            <button class="categoria-pill btn btn-outline-secondary activa" data-cat=""><i class="bi bi-grid me-1"></i>Todas</button>
+            {% for valor, etiqueta in categorias %}
+            <button class="categoria-pill btn btn-outline-primary" data-cat="{{ valor }}">{{ etiqueta }}</button>
+            {% endfor %}
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span id="contador-resultados" class="badge bg-primary bg-opacity-10 text-primary fw-semibold px-3 py-2">{{ total }} norma{{ total|pluralize:"s" }}</span>
+        </div>
+        <div id="grid-normas" class="row g-3 mb-4">
+            {% for norma in normas %}
+            <div class="col-md-6 col-lg-4 tarjeta-norma" data-titulo="{{ norma.titulo|lower }}" data-desc="{{ norma.descripcion|lower }}" data-art="{{ norma.articulo|lower }}" data-cat="{{ norma.categoria }}">
+                <div class="norma-card card h-100 border-start border-4 border-{{ norma.get_categoria_color }}" onclick="window.location='/normas/norma/{{ norma.pk }}/'">
+                    <div class="card-body d-flex gap-3">
+                        <div class="norma-icon bg-{{ norma.get_categoria_color }} bg-opacity-10 text-{{ norma.get_categoria_color }}">
+                            <i class="{{ norma.get_categoria_icon }}"></i>
+                        </div>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <span class="badge bg-{{ norma.get_categoria_color }} bg-opacity-10 text-{{ norma.get_categoria_color }} small fw-semibold rounded-pill">{{ norma.get_categoria_display }}</span>
+                                {% if norma.articulo %}<span style="font-size:.72rem;background:rgba(37,99,235,.1);color:#2563eb;border-radius:20px;padding:2px 8px;">Art. {{ norma.articulo }}</span>{% endif %}
+                            </div>
+                            <h6 class="fw-bold mb-1 mt-1" style="font-size:.9rem;line-height:1.3;">{{ norma.titulo }}</h6>
+                            <p class="text-muted small mb-0" style="line-height:1.4;">{{ norma.descripcion|truncatechars:100 }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5 text-muted"><i class="bi bi-search fs-1 d-block mb-3"></i><h5>No hay normas registradas aún.</h5></div>
+            {% endfor %}
+        </div>
+        <div id="sin-resultados" class="text-center py-5 d-none"><i class="bi bi-search fs-1 text-muted d-block mb-3"></i><h5 class="text-muted">Sin resultados</h5></div>
+    </div>
+
+    <!-- TAB 2: CÓDIGO NACIONAL DE TRÁNSITO -->
+    <div id="seccion-codigo" class="d-none">
+        <div class="codigo-section">
+            <!-- Encabezado -->
+            <div class="titulo-ley text-center">
+                <i class="bi bi-shield-check" style="font-size:2.5rem;opacity:.9;"></i>
+                <h3 class="fw-bold mt-2 mb-1">Código Nacional de Tránsito Terrestre</h3>
+                <p class="mb-1 opacity-90">República de Colombia — Ley 769 del 6 de agosto de 2002</p>
+                <p class="mb-2 opacity-75 small">Por la cual se expide el Código Nacional de Tránsito Terrestre y se dictan otras disposiciones</p>
+                <a href="{% static 'docs/ley_769_2002.pdf' %}" target="_blank"
+                   class="btn btn-light fw-semibold mt-1" style="border-radius:30px;">
+                    <i class="bi bi-file-earmark-pdf text-danger me-2"></i>Descargar PDF completo
+                </a>
+            </div>
+
+            <!-- Stats -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3"><div class="text-center p-3 rounded-3" style="background:#eff6ff;"><div class="fw-bold fs-4 text-primary">17</div><div class="small text-muted">Títulos</div></div></div>
+                <div class="col-6 col-md-3"><div class="text-center p-3 rounded-3" style="background:#f0fdf4;"><div class="fw-bold fs-4 text-success">253</div><div class="small text-muted">Artículos</div></div></div>
+                <div class="col-6 col-md-3"><div class="text-center p-3 rounded-3" style="background:#fffbeb;"><div class="fw-bold fs-4 text-warning">2002</div><div class="small text-muted">Año</div></div></div>
+                <div class="col-6 col-md-3"><div class="text-center p-3 rounded-3" style="background:#fef2f2;"><div class="fw-bold fs-4 text-danger">769</div><div class="small text-muted">N.° de Ley</div></div></div>
+            </div>
+
+            <!-- Buscador -->
+            <div class="d-flex gap-3 align-items-center mb-4 flex-wrap">
+                <div class="flex-grow-1 position-relative">
+                    <i class="bi bi-search position-absolute" style="left:14px;top:50%;transform:translateY(-50%);color:#9ca3af;"></i>
+                    <input type="text" id="buscador-codigo" class="form-control w-100" style="padding-left:38px;" placeholder="Buscar en el Código...">
+                </div>
+                <a href="{% static 'docs/ley_769_2002.pdf' %}" target="_blank" class="btn btn-primary btn-sm">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Descargar PDF oficial
+                </a>
+            </div>
+
+            <!-- ARTÍCULOS CLAVE -->
+            <div id="contenido-codigo">
+
+                <div class="capitulo">
+                    <h5><i class="bi bi-speedometer2 text-danger me-2"></i>Título VII — Velocidades</h5>
+                    <div class="articulo articulo-velocidad" data-texto="velocidad zona urbana 50 km/h">
+                        <div class="art-num">Artículo 106</div>
+                        <strong>Velocidad en zona urbana:</strong> La velocidad máxima permitida en zonas urbanas es de <strong>50 km/h</strong> en vías de dos o más carriles separados, y de <strong>30 km/h</strong> en zonas residenciales y escolares.
+                    </div>
+                    <div class="articulo articulo-velocidad" data-texto="velocidad carretera 80 km/h autopista 100 km/h">
+                        <div class="art-num">Artículo 107</div>
+                        <strong>Velocidad en carretera:</strong> En carreteras de doble calzada: <strong>120 km/h</strong>. En carreteras de una calzada: <strong>80 km/h</strong>. En vías secundarias y transitorias: <strong>60 km/h</strong>.
+                    </div>
+                    <div class="articulo articulo-velocidad" data-texto="exceso velocidad multa infracción">
+                        <div class="art-num">Artículo 131 — C.2</div>
+                        <strong>Multa por exceso de velocidad:</strong> Conducir a velocidad superior a la permitida genera multa de <strong>15 SMLDV</strong> y suspensión de la licencia por 3 meses.
+                    </div>
+                </div>
+
+                <div class="capitulo">
+                    <h5><i class="bi bi-cup text-warning me-2"></i>Título XI — Alcoholemia y sustancias psicoactivas</h5>
+                    <div class="articulo articulo-alcoholemia" data-texto="alcohol licor conducir prohibido">
+                        <div class="art-num">Artículo 152</div>
+                        <strong>Límite de alcohol en sangre:</strong> Está <strong>prohibido conducir</strong> con una concentración de alcohol en sangre igual o superior a <strong>40 mg por 100 ml</strong> para conductores particulares, y <strong>20 mg por 100 ml</strong> para conductores de servicio público.
+                    </div>
+                    <div class="articulo articulo-alcoholemia" data-texto="embriaguez multa sanción inmovilización">
+                        <div class="art-num">Artículo 153</div>
+                        <strong>Sanciones por embriaguez:</strong> Primera vez: multa de <strong>360 SMLDV</strong> + suspensión licencia 1 año + inmovilización vehículo. Segunda vez: multa de <strong>720 SMLDV</strong> + suspensión 3 años. Tercera vez: multa de <strong>1440 SMLDV</strong> + cancelación definitiva.
+                    </div>
+                </div>
+
+                <div class="capitulo">
+                    <h5><i class="bi bi-person-walking text-success me-2"></i>Título VIII — Peatones y ciclistas</h5>
+                    <div class="articulo articulo-peatones" data-texto="peatón prioridad cruce cebra semáforo">
+                        <div class="art-num">Artículo 56</div>
+                        <strong>Prelación del peatón:</strong> Los conductores deben ceder el paso a los peatones y dar prelación a quienes cruzan la calzada por las <strong>zonas demarcadas</strong> y donde el semáforo les indique paso.
+                    </div>
+                    <div class="articulo articulo-peatones" data-texto="ciclovía ciclista carril bicicleta">
+                        <div class="art-num">Artículo 94</div>
+                        <strong>Derecho de los ciclistas:</strong> Los ciclistas tienen derecho a <strong>carril exclusivo</strong> donde exista ciclovía. En su defecto, circulan por la derecha de la vía respetando las señales de tránsito.
+                    </div>
+                </div>
+
+                <div class="capitulo">
+                    <h5><i class="bi bi-sign-stop text-primary me-2"></i>Título IV — Señales de tránsito</h5>
+                    <div class="articulo articulo-senales" data-texto="señal obediencia prioridad respetar">
+                        <div class="art-num">Artículo 113</div>
+                        <strong>Obligatoriedad de las señales:</strong> Todo conductor deberá obedecer las señales de tránsito, teniendo en cuenta el siguiente orden de prioridad: <strong>1)</strong> Agente de tránsito, <strong>2)</strong> Semáforos, <strong>3)</strong> Señales verticales, <strong>4)</strong> Señales horizontales (demarcación).
+                    </div>
+                    <div class="articulo articulo-senales" data-texto="pare stop semáforo rojo alto">
+                        <div class="art-num">Artículo 114</div>
+                        <strong>Semáforo en rojo:</strong> Cuando la luz roja esté encendida, el conductor deberá <strong>detener totalmente su vehículo</strong> antes de la línea de detención. Violar este artículo genera multa de <strong>15 SMLDV</strong>.
+                    </div>
+                </div>
+
+                <div class="capitulo">
+                    <h5><i class="bi bi-file-text text-secondary me-2"></i>Título II — Documentos obligatorios</h5>
+                    <div class="articulo articulo-general" data-texto="licencia conducción soat tecnicomecánica documentos portar">
+                        <div class="art-num">Artículo 30</div>
+                        <strong>Documentos obligatorios para circular:</strong> Todo conductor debe portar <strong>licencia de conducción vigente</strong>, SOAT vigente, tarjeta de propiedad y certificado de revisión técnico-mecánica (para vehículos de más de 2 años). La ausencia genera inmovilización del vehículo.
+                    </div>
+                    <div class="articulo articulo-general" data-texto="seguro SOAT obligatorio accidente">
+                        <div class="art-num">Artículo 42</div>
+                        <strong>SOAT obligatorio:</strong> Todos los vehículos automotores que transiten por el territorio nacional deben contar con el <strong>Seguro Obligatorio de Accidentes de Tránsito (SOAT)</strong> vigente. Circular sin él genera multa de <strong>30 SMLDV</strong> e inmovilización.
+                    </div>
+                </div>
+
+                <div class="capitulo">
+                    <h5><i class="bi bi-exclamation-octagon text-dark me-2"></i>Título XII — Infracciones y sanciones</h5>
+                    <div class="articulo articulo-general" data-texto="cinturón seguridad obligatorio multa">
+                        <div class="art-num">Artículo 82</div>
+                        <strong>Cinturón de seguridad:</strong> El uso del cinturón de seguridad es <strong>obligatorio</strong> para el conductor y todos los ocupantes del vehículo. Su omisión genera multa de <strong>4 SMLDV</strong>. Para menores de 10 años, se debe usar silla de seguridad.
+                    </div>
+                    <div class="articulo articulo-general" data-texto="celular teléfono conducir prohibido multa">
+                        <div class="art-num">Artículo 131 — D.4</div>
+                        <strong>Uso del celular al conducir:</strong> Está <strong>prohibido</strong> usar el teléfono celular u otro dispositivo electrónico mientras se conduce, a menos de que sea con manos libres. La infracción genera multa de <strong>15 SMLDV</strong>.
+                    </div>
+                    <div class="articulo articulo-general" data-texto="pare detener señal emergencia">
+                        <div class="art-num">Artículo 63</div>
+                        <strong>Prelación a vehículos de emergencia:</strong> Todo conductor debe ceder el paso a las <strong>ambulancias, carros de bomberos y vehículos de la policía</strong> que circulen con señales de emergencia activadas, independientemente de la dirección de circulación.
+                    </div>
+                </div>
+
+                <div class="mt-4 p-3 rounded-3 d-flex align-items-center gap-3" style="background:#f0f9ff;border:1px solid #bae6fd;">
+                    <i class="bi bi-info-circle text-primary fs-4 flex-shrink-0"></i>
+                    <div>
+                        <strong>Texto completo oficial:</strong> Este resumen incluye los artículos más relevantes.
+                        <a href="{% static 'docs/ley_769_2002.pdf' %}" target="_blank" class="text-primary fw-semibold"><i class="bi bi-file-earmark-pdf me-1"></i>Descargar Ley 769 de 2002 (PDF oficial)</a> — Fuente: Función Pública Colombia.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function mostrarTab(tab) {
+    document.getElementById('seccion-normas').classList.toggle('d-none', tab !== 'normas');
+    document.getElementById('seccion-codigo').classList.toggle('d-none', tab !== 'codigo');
+    document.getElementById('tab-normas').classList.toggle('activo', tab === 'normas');
+    document.getElementById('tab-codigo').classList.toggle('activo', tab === 'codigo');
+}
+
+// Búsqueda en tiempo real - Normas del sistema
+const buscador = document.getElementById('buscador-normas');
+const tarjetas = document.querySelectorAll('.tarjeta-norma');
+const contador = document.getElementById('contador-resultados');
+const sinResult = document.getElementById('sin-resultados');
+let filtroCategoria = '';
+
+function filtrar() {
+    const q = buscador.value.toLowerCase().trim();
+    let visible = 0;
+    tarjetas.forEach(t => {
+        const pasa = (!q || (t.dataset.titulo||'').includes(q) || (t.dataset.desc||'').includes(q) || (t.dataset.art||'').includes(q))
+                  && (!filtroCategoria || t.dataset.cat === filtroCategoria);
+        t.classList.toggle('norma-hidden', !pasa);
+        if (pasa) visible++;
+    });
+    contador.textContent = `${visible} norma${visible !== 1 ? 's' : ''} encontrada${visible !== 1 ? 's' : ''}`;
+    sinResult.classList.toggle('d-none', visible > 0);
+}
+buscador.addEventListener('input', filtrar);
+document.querySelectorAll('.categoria-pill').forEach(pill => {
+    pill.addEventListener('click', function() {
+        document.querySelectorAll('.categoria-pill').forEach(p => p.classList.remove('activa'));
+        this.classList.add('activa');
+        filtroCategoria = this.dataset.cat;
+        filtrar();
+    });
+});
+
+// Búsqueda en tiempo real - Código Nacional
+document.getElementById('buscador-codigo').addEventListener('input', function() {
+    const q = this.value.toLowerCase().trim();
+    document.querySelectorAll('.articulo').forEach(art => {
+        const texto = (art.dataset.texto || '') + art.textContent.toLowerCase();
+        art.classList.toggle('oculto', !!q && !texto.includes(q));
+    });
+    document.querySelectorAll('.capitulo').forEach(cap => {
+        const todos = cap.querySelectorAll('.articulo');
+        const visibles = cap.querySelectorAll('.articulo:not(.oculto)');
+        cap.style.display = todos.length && visibles.length === 0 ? 'none' : '';
+    });
+});
+</script>
+{% endblock %}

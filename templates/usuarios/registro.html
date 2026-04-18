@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Registro - Vías Seguras{% endblock %}
+
+{% block content %}
+<div class="min-vh-100 d-flex align-items-center py-5" style="background: linear-gradient(135deg, #1a3a5c 0%, #2563eb 100%); margin-top: -1rem;">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="text-center mb-4">
+                    <i class="bi bi-shield-check text-white" style="font-size: 3rem;"></i>
+                    <h2 class="text-white mt-2 fw-bold">Vías Seguras</h2>
+                    <p class="text-white-50">Crea tu cuenta gratuita</p>
+                </div>
+                <div class="card p-4">
+                    <h4 class="mb-4 fw-bold text-center" style="color: #1a3a5c;">
+                        <i class="bi bi-person-plus me-2 text-primary"></i>Crear Cuenta
+                    </h4>
+
+                    <!-- Botón Google OAuth (arriba para mayor visibilidad) -->
+                    <a href="/auth/login/google-oauth2/"
+                       class="btn w-100 d-flex align-items-center justify-content-center gap-2 py-2 mb-4"
+                       style="border: 2px solid #e5e7eb; background:white; font-weight:600; border-radius:8px;">
+                        <svg width="20" height="20" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                        </svg>
+                        Registrarse con Google
+                    </a>
+
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <hr class="flex-grow-1 my-0">
+                        <span class="text-muted small px-2">o con correo y contraseña</span>
+                        <hr class="flex-grow-1 my-0">
+                    </div>
+
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        <div class="row">
+                            {% for field in form %}
+                            <div class="col-{% if forloop.counter <= 2 %}6{% else %}12{% endif %} mb-3">
+                                <label class="form-label fw-500">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in field.errors %}<i class="bi bi-exclamation-circle me-1"></i>{{ error }}{% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if field.help_text %}
+                                <div class="text-muted small mt-1">{{ field.help_text }}</div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 py-2">
+                            <i class="bi bi-person-check me-2"></i>Crear Cuenta
+                        </button>
+                    </form>
+
+                    <hr class="my-3">
+                    <p class="text-center text-muted mb-0 small">
+                        ¿Ya tienes cuenta?
+                        <a href="/usuarios/login/" class="text-primary fw-semibold">Inicia sesión</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

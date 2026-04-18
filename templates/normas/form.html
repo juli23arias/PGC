@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }} - Vías Seguras{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+                <li class="breadcrumb-item"><a href="/normas/" class="text-white-50">Normas</a></li>
+                <li class="breadcrumb-item active text-white">{{ titulo }}</li>
+            </ol>
+        </nav>
+        <h1 class="fw-bold"><i class="bi bi-book me-3"></i>{{ titulo }}</h1>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-file-earmark-text me-2"></i>Información de la norma
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        {% for field in form %}
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in field.errors %}<i class="bi bi-exclamation-circle me-1"></i>{{ error }}<br>{% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-save me-2"></i>{{ accion }}
+                            </button>
+                            <a href="/normas/" class="btn btn-outline-secondary">
+                                <i class="bi bi-x me-2"></i>Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

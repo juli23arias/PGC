@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Usuarios - Vías Seguras{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h1 class="fw-bold mb-1"><i class="bi bi-people me-3"></i>Gestión de Usuarios</h1>
+                <p class="mb-0 opacity-75">Solo visible para administradores</p>
+            </div>
+            <a href="/usuarios/gestion/crear/" class="btn btn-warning fw-semibold">
+                <i class="bi bi-person-plus me-2"></i>Crear usuario
+            </a>
+        </div>
+    </div>
+</div>
+<div class="container">
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead style="background:#f8fafc;">
+                        <tr>
+                            <th class="ps-4">Usuario</th>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Rol</th>
+                            <th>Registro</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in usuarios %}
+                        <tr>
+                            <td class="ps-4 fw-semibold">
+                                <i class="bi bi-person-circle me-2 text-primary"></i>{{ u.username }}
+                                {% if u == request.user %}<span class="badge bg-primary ms-1">Tú</span>{% endif %}
+                            </td>
+                            <td>{{ u.get_full_name|default:"—" }}</td>
+                            <td>{{ u.email|default:"—" }}</td>
+                            <td>
+                                {% if u.perfil.es_administrador %}
+                                <span class="badge bg-danger"><i class="bi bi-shield-fill me-1"></i>Admin</span>
+                                {% else %}
+                                <span class="badge bg-secondary"><i class="bi bi-person me-1"></i>Usuario</span>
+                                {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ u.date_joined|date:"d/m/Y" }}</small></td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <a href="/usuarios/gestion/{{ u.pk }}/editar/" class="btn btn-sm btn-outline-primary" title="Editar">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    {% if u != request.user %}
+                                    <a href="/usuarios/gestion/{{ u.pk }}/eliminar/" class="btn btn-sm btn-outline-danger" title="Eliminar">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">No hay usuarios registrados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="mt-3 text-muted small"><i class="bi bi-info-circle me-1"></i>Total: {{ usuarios|length }} usuario{{ usuarios|length|pluralize:"s" }}</div>
+</div>
+{% endblock %}

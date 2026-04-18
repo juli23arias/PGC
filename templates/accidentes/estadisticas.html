@@ -1,0 +1,533 @@
+{% extends 'base.html' %}
+
+{% block title %}Estadísticas — Vías Seguras{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-hero {
+        background: linear-gradient(135deg, #1a3a5c 0%, #2563eb 100%);
+        color: white;
+        padding: 2.5rem 0 3rem;
+        margin-bottom: -1.5rem;
+        border-radius: 0 0 28px 28px;
+    }
+    .kpi-card {
+        border-radius: 20px;
+        padding: 1.6rem 1.5rem;
+        color: white;
+        position: relative;
+        overflow: hidden;
+        border: none;
+        transition: transform .2s, box-shadow .2s;
+    }
+    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,.18) !important; }
+    .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: -40px; right: -40px;
+        width: 130px; height: 130px;
+        background: rgba(255,255,255,.1);
+        border-radius: 50%;
+    }
+    .kpi-card::after {
+        content: '';
+        position: absolute;
+        bottom: -25px; left: -25px;
+        width: 90px; height: 90px;
+        background: rgba(255,255,255,.07);
+        border-radius: 50%;
+    }
+    .kpi-total  { background: linear-gradient(135deg,#1a3a5c,#2563eb); }
+    .kpi-alta   { background: linear-gradient(135deg,#991b1b,#ef4444); }
+    .kpi-media  { background: linear-gradient(135deg,#92400e,#f59e0b); }
+    .kpi-baja   { background: linear-gradient(135deg,#065f46,#10b981); }
+    .kpi-num { font-size: 3rem; font-weight: 800; line-height: 1; position: relative; z-index: 1; }
+    .kpi-label { font-size: .82rem; opacity: .88; text-transform: uppercase; letter-spacing: .6px; font-weight: 600; position: relative; z-index: 1; margin-top: .3rem; }
+    .kpi-icon { font-size: 2rem; opacity: .25; position: absolute; right: 1.2rem; top: 1rem; }
+    .kpi-pct {
+        display: inline-block;
+        background: rgba(255,255,255,.2);
+        border-radius: 20px;
+        padding: 2px 10px;
+        font-size: .75rem;
+        font-weight: 700;
+        margin-top: .5rem;
+        position: relative; z-index: 1;
+    }
+
+    .chart-card {
+        background: white;
+        border-radius: 20px;
+        padding: 1.6rem;
+        box-shadow: 0 2px 16px rgba(0,0,0,.06);
+        height: 100%;
+    }
+    .chart-title {
+        font-size: .95rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+    .chart-title i { color: #2563eb; font-size: 1.1rem; }
+
+    .severity-bar { border-radius: 8px; height: 10px; margin-bottom: .25rem; }
+    .sev-alta  { background: linear-gradient(90deg, #ef4444, #dc2626); }
+    .sev-media { background: linear-gradient(90deg, #f59e0b, #d97706); }
+    .sev-baja  { background: linear-gradient(90deg, #10b981, #059669); }
+
+    .recent-row {
+        display: flex;
+        align-items: center;
+        gap: .9rem;
+        padding: .7rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .recent-row:last-child { border-bottom: none; }
+    .grav-dot {
+        width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .grav-dot-alta  { background: #ef4444; }
+    .grav-dot-media { background: #f59e0b; }
+    .grav-dot-baja  { background: #10b981; }
+
+    .insight-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        background: #eff6ff;
+        color: #1d4ed8;
+        border-radius: 20px;
+        padding: 5px 14px;
+        font-size: .8rem;
+        font-weight: 600;
+    }
+    .insight-badge.warning { background: #fef3c7; color: #92400e; }
+    .insight-badge.danger  { background: #fee2e2; color: #991b1b; }
+    .insight-badge.success { background: #d1fae5; color: #065f46; }
+
+    .section-divider {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin: 2.5rem 0 1.5rem;
+        color: #64748b;
+        font-weight: 700;
+        font-size: .82rem;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+    }
+    .section-divider::before, .section-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: #e2e8f0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<div class="stats-hero">
+    <div class="container">
+        <div class="d-flex align-items-center gap-3 mb-1">
+            <div style="background:rgba(255,255,255,.15);border-radius:14px;padding:.7rem .9rem;">
+                <i class="bi bi-bar-chart-line fs-4"></i>
+            </div>
+            <div>
+                <h1 class="fw-bold mb-0" style="font-size:1.7rem;">Estadísticas de Accidentes</h1>
+                <p class="mb-0 opacity-75 small">Análisis visual de accidentes registrados en el sistema</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-4">
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-2" style="margin-top:1rem;">
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card kpi-total shadow">
+                <i class="bi bi-collection kpi-icon"></i>
+                <div class="kpi-num">{{ total }}</div>
+                <div class="kpi-label">Total accidentes</div>
+                <span class="kpi-pct">100%</span>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card kpi-alta shadow">
+                <i class="bi bi-x-octagon kpi-icon"></i>
+                <div class="kpi-num">{{ total_alta }}</div>
+                <div class="kpi-label">Gravedad Alta</div>
+                <span class="kpi-pct">{{ pct_alta }}%</span>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card kpi-media shadow">
+                <i class="bi bi-exclamation-triangle kpi-icon"></i>
+                <div class="kpi-num">{{ total_media }}</div>
+                <div class="kpi-label">Gravedad Media</div>
+                <span class="kpi-pct">{{ pct_media }}%</span>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="kpi-card kpi-baja shadow">
+                <i class="bi bi-check-circle kpi-icon"></i>
+                <div class="kpi-num">{{ total_baja }}</div>
+                <div class="kpi-label">Gravedad Baja</div>
+                <span class="kpi-pct">{{ pct_baja }}%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Insights -->
+    {% if total > 0 %}
+    <div class="d-flex flex-wrap gap-2 mb-4 mt-3">
+        {% if pct_alta >= 40 %}
+        <span class="insight-badge danger"><i class="bi bi-exclamation-triangle-fill"></i>Alta concentración de accidentes graves ({{ pct_alta }}%)</span>
+        {% elif pct_alta >= 20 %}
+        <span class="insight-badge warning"><i class="bi bi-exclamation-triangle"></i>Accidentes de alta gravedad representan el {{ pct_alta }}%</span>
+        {% else %}
+        <span class="insight-badge success"><i class="bi bi-shield-check"></i>Mayoría de accidentes son de baja o media gravedad</span>
+        {% endif %}
+        {% if total_baja > total_alta and total_baja > total_media %}
+        <span class="insight-badge success"><i class="bi bi-arrow-up-circle"></i>La gravedad baja es la más frecuente</span>
+        {% elif total_alta > total_baja and total_alta > total_media %}
+        <span class="insight-badge danger"><i class="bi bi-arrow-up-circle"></i>La gravedad alta es la más frecuente</span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Fila 1: Donut + Barras temporales -->
+    <div class="section-divider"><i class="bi bi-pie-chart me-1"></i>Distribución por gravedad y tendencia temporal</div>
+
+    <div class="row g-3 mb-3">
+        <!-- Donut gravedad -->
+        <div class="col-md-5">
+            <div class="chart-card">
+                <div class="chart-title"><i class="bi bi-pie-chart-fill"></i>Distribución por Gravedad</div>
+                {% if total == 0 %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>Sin datos disponibles
+                </div>
+                {% else %}
+                <div style="position:relative;max-width:260px;margin:0 auto 1.2rem;">
+                    <canvas id="chartGravedad"></canvas>
+                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+                        <div style="font-size:1.8rem;font-weight:800;color:#1e293b;">{{ total }}</div>
+                        <div style="font-size:.72rem;color:#64748b;font-weight:600;text-transform:uppercase;">total</div>
+                    </div>
+                </div>
+                <!-- Progress bars -->
+                <div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold" style="color:#ef4444;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:5px;"></span>Alta</span>
+                        <span class="small fw-bold">{{ total_alta }} <span class="text-muted fw-normal">({{ pct_alta }}%)</span></span>
+                    </div>
+                    <div class="progress mb-3" style="height:8px;border-radius:8px;">
+                        <div class="progress-bar sev-alta" style="width:{{ pct_alta }}%;border-radius:8px;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold" style="color:#f59e0b;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;margin-right:5px;"></span>Media</span>
+                        <span class="small fw-bold">{{ total_media }} <span class="text-muted fw-normal">({{ pct_media }}%)</span></span>
+                    </div>
+                    <div class="progress mb-3" style="height:8px;border-radius:8px;">
+                        <div class="progress-bar sev-media" style="width:{{ pct_media }}%;border-radius:8px;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-semibold" style="color:#10b981;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10b981;margin-right:5px;"></span>Baja</span>
+                        <span class="small fw-bold">{{ total_baja }} <span class="text-muted fw-normal">({{ pct_baja }}%)</span></span>
+                    </div>
+                    <div class="progress" style="height:8px;border-radius:8px;">
+                        <div class="progress-bar sev-baja" style="width:{{ pct_baja }}%;border-radius:8px;"></div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Línea temporal por mes -->
+        <div class="col-md-7">
+            <div class="chart-card">
+                <div class="chart-title"><i class="bi bi-graph-up"></i>Accidentes por Mes (últimos 12 meses)</div>
+                {% if not json_meses_data or json_meses_data == '[]' %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-calendar-x fs-1 d-block mb-2"></i>Sin datos en este período
+                </div>
+                {% else %}
+                <canvas id="chartMeses" style="max-height:260px;"></canvas>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila 2: Zonas + Días de la semana -->
+    <div class="section-divider"><i class="bi bi-geo-alt me-1"></i>Distribución por zona y patrón semanal</div>
+
+    <div class="row g-3 mb-3">
+        <!-- Barras horizontales por zona -->
+        <div class="col-md-7">
+            <div class="chart-card">
+                <div class="chart-title"><i class="bi bi-geo-alt-fill"></i>Top 10 Zonas con más Accidentes</div>
+                {% if not json_zonas_data or json_zonas_data == '[]' %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-map fs-1 d-block mb-2"></i>Sin datos de zona
+                </div>
+                {% else %}
+                <canvas id="chartZonas" style="max-height:320px;"></canvas>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Barras por día de la semana -->
+        <div class="col-md-5">
+            <div class="chart-card">
+                <div class="chart-title"><i class="bi bi-calendar-week"></i>Accidentes por Día de la Semana</div>
+                <canvas id="chartDias" style="max-height:280px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila 3: Actividad reciente -->
+    <div class="section-divider"><i class="bi bi-clock-history me-1"></i>Actividad reciente</div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="chart-card">
+                <div class="chart-title"><i class="bi bi-clock-history"></i>Últimos 5 Accidentes Registrados</div>
+                {% if recientes %}
+                    {% for r in recientes %}
+                    <div class="recent-row">
+                        <div class="grav-dot grav-dot-{{ r.gravedad }}"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div class="fw-semibold text-truncate" style="font-size:.87rem;">{{ r.titulo }}</div>
+                            <div class="text-muted" style="font-size:.76rem;">{{ r.ubicacion|truncatechars:40 }}</div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-size:.75rem;color:#94a3b8;">{{ r.fecha_str }}</div>
+                            <a href="/accidente/{{ r.id }}/" class="small text-primary fw-semibold" style="font-size:.75rem;">Ver →</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-inbox fs-2 d-block mb-2"></i>No hay accidentes registrados
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="chart-card">
+                <div class="chart-title"><i class="bi bi-info-circle"></i>Resumen General</div>
+                <div style="display:flex;flex-direction:column;gap:.75rem;">
+                    <div style="background:#f8fafc;border-radius:12px;padding:.9rem 1.1rem;display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <div class="small text-muted">Total de accidentes</div>
+                            <div class="fw-bold" style="font-size:1.1rem;">{{ total }}</div>
+                        </div>
+                        <i class="bi bi-collection fs-3 text-primary opacity-50"></i>
+                    </div>
+                    <div style="background:#fef9ec;border-radius:12px;padding:.9rem 1.1rem;display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <div class="small text-muted">Nivel más frecuente</div>
+                            <div class="fw-bold" style="font-size:1.05rem;">
+                                {% if total_alta >= total_media and total_alta >= total_baja %}
+                                    <span style="color:#ef4444;">Alta gravedad</span>
+                                {% elif total_media >= total_alta and total_media >= total_baja %}
+                                    <span style="color:#f59e0b;">Media gravedad</span>
+                                {% else %}
+                                    <span style="color:#10b981;">Baja gravedad</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <i class="bi bi-bar-chart fs-3 text-warning opacity-50"></i>
+                    </div>
+                    <div style="background:#f0fdf4;border-radius:12px;padding:.9rem 1.1rem;display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <div class="small text-muted">Accidentes con ubicación GPS</div>
+                            <div class="fw-bold" style="font-size:1.05rem;">{% with gps=total_alta|add:total_media|add:total_baja %}{{ gps }}{% endwith %} / {{ total }}</div>
+                        </div>
+                        <i class="bi bi-geo-alt fs-3 text-success opacity-50"></i>
+                    </div>
+                    <div class="mt-auto pt-2">
+                        <a href="/" class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-speedometer2 me-1"></i>Ir al Dashboard
+                        </a>
+                        <a href="/accidente/nuevo/" class="btn btn-outline-primary btn-sm w-100 mt-2">
+                            <i class="bi bi-plus-circle me-1"></i>Registrar Nuevo Accidente
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.color = '#64748b';
+
+    const GRAVEDAD_DATA   = {{ json_gravedad_data|safe }};
+    const MESES_LABELS    = {{ json_meses_labels|safe }};
+    const MESES_DATA      = {{ json_meses_data|safe }};
+    const ZONAS_LABELS    = {{ json_zonas_labels|safe }};
+    const ZONAS_DATA      = {{ json_zonas_data|safe }};
+    const DIAS_LABELS     = {{ json_dias_labels|safe }};
+    const DIAS_DATA       = {{ json_dias_data|safe }};
+
+    // ── Donut de gravedad ─────────────────────────────────────────────────────
+    const ctxG = document.getElementById('chartGravedad');
+    if (ctxG && {{ total }} > 0) {
+        new Chart(ctxG, {
+            type: 'doughnut',
+            data: {
+                labels: ['Baja', 'Media', 'Alta'],
+                datasets: [{
+                    data: GRAVEDAD_DATA,
+                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                    borderColor: ['#fff','#fff','#fff'],
+                    borderWidth: 3,
+                    hoverOffset: 8,
+                }],
+            },
+            options: {
+                cutout: '68%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ` ${ctx.label}: ${ctx.parsed} accidentes`,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    // ── Línea por mes ─────────────────────────────────────────────────────────
+    const ctxM = document.getElementById('chartMeses');
+    if (ctxM && MESES_DATA.length > 0) {
+        new Chart(ctxM, {
+            type: 'line',
+            data: {
+                labels: MESES_LABELS,
+                datasets: [{
+                    label: 'Accidentes',
+                    data: MESES_DATA,
+                    fill: true,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37,99,235,.10)',
+                    pointBackgroundColor: '#2563eb',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    tension: 0.35,
+                    borderWidth: 2.5,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, precision: 0 },
+                        grid: { color: '#f1f5f9' },
+                    },
+                    x: { grid: { display: false } },
+                },
+            },
+        });
+    }
+
+    // ── Barras horizontales por zona ──────────────────────────────────────────
+    const ctxZ = document.getElementById('chartZonas');
+    if (ctxZ && ZONAS_DATA.length > 0) {
+        const palette = [
+            '#2563eb','#3b82f6','#60a5fa','#93c5fd',
+            '#1d4ed8','#1e40af','#1e3a8a','#172554',
+            '#0369a1','#0284c7',
+        ];
+        new Chart(ctxZ, {
+            type: 'bar',
+            data: {
+                labels: ZONAS_LABELS,
+                datasets: [{
+                    label: 'Accidentes',
+                    data: ZONAS_DATA,
+                    backgroundColor: ZONAS_DATA.map((_, i) => palette[i % palette.length]),
+                    borderRadius: 8,
+                    borderSkipped: false,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, precision: 0 },
+                        grid: { color: '#f1f5f9' },
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: {
+                            font: { size: 11 },
+                            callback: v => v.length > 22 ? v.slice(0, 22) + '…' : v,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    // ── Barras por día de la semana ────────────────────────────────────────────
+    const ctxD = document.getElementById('chartDias');
+    if (ctxD) {
+        const maxDia = Math.max(...DIAS_DATA);
+        new Chart(ctxD, {
+            type: 'bar',
+            data: {
+                labels: DIAS_LABELS,
+                datasets: [{
+                    label: 'Accidentes',
+                    data: DIAS_DATA,
+                    backgroundColor: DIAS_DATA.map(v =>
+                        v === maxDia && maxDia > 0 ? '#ef4444' : 'rgba(37,99,235,.55)'
+                    ),
+                    borderRadius: 8,
+                    borderSkipped: false,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} accidentes` } },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, precision: 0 },
+                        grid: { color: '#f1f5f9' },
+                    },
+                    x: { grid: { display: false } },
+                },
+            },
+        });
+    }
+})();
+</script>
+{% endblock %}

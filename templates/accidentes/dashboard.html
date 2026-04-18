@@ -1,0 +1,840 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Vías Seguras{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+    #mapa-accidentes {
+        height: 480px;
+        border-radius: 16px;
+        z-index: 0;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    }
+    .leaflet-popup-content-wrapper {
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+        border: none;
+        padding: 0;
+        overflow: hidden;
+    }
+    .leaflet-popup-content {
+        margin: 0;
+        width: 240px !important;
+    }
+    .popup-header {
+        padding: 10px 14px 8px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: white;
+    }
+    .popup-body { padding: 10px 14px 12px; font-size: 0.82rem; color: #374151; }
+    .popup-body p { margin: 0 0 5px; }
+    .popup-badge {
+        display: inline-block;
+        border-radius: 20px;
+        padding: 2px 10px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: white;
+        margin-bottom: 6px;
+    }
+    .popup-link {
+        display: block;
+        margin-top: 8px;
+        text-align: center;
+        padding: 5px;
+        background: #f0f4f8;
+        border-radius: 6px;
+        color: #2563eb;
+        font-weight: 600;
+        text-decoration: none;
+        font-size: 0.8rem;
+        transition: background 0.2s;
+    }
+    .popup-link:hover { background: #dbeafe; }
+    .map-legend {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    }
+    .legend-dot {
+        width: 14px; height: 14px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+        border: 2px solid rgba(0,0,0,0.15);
+        flex-shrink: 0;
+    }
+    .map-container {
+        position: relative;
+        background: white;
+        border-radius: 20px;
+        padding: 1.25rem;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+        margin-bottom: 2rem;
+    }
+    .map-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+    .pulse-ring {
+        animation: pulse-ring 1.8s ease-out infinite;
+    }
+    @keyframes pulse-ring {
+        0%   { stroke-opacity: 0.8; }
+        50%  { stroke-opacity: 0.2; }
+        100% { stroke-opacity: 0.8; }
+    }
+    /* ── Zonas de riesgo ─────────────────────────────────────────── */
+    .zona-toggle-btn { border-radius: 30px; font-size: .8rem; font-weight: 600; padding: 5px 14px; transition: all .2s; }
+    .zona-toggle-btn.activo { background: #1a3a5c; color: white; border-color: #1a3a5c; box-shadow: 0 3px 10px rgba(26,58,92,.3); }
+    .zonas-panel { background: white; border-radius: 16px; padding: 1.1rem 1.4rem; box-shadow: 0 2px 16px rgba(0,0,0,.06); margin-bottom: 2rem; border-top: 4px solid #2563eb; }
+    .zona-stat { border-radius: 12px; padding: .7rem 1rem; display: flex; align-items: center; gap: .75rem; }
+    .zona-dot { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 800; color: white; flex-shrink: 0; }
+    .zona-alto  { background: rgba(239,68,68,.12); }
+    .zona-medio { background: rgba(245,158,11,.12); }
+    .zona-bajo  { background: rgba(34,197,94,.12); }
+    .zona-dot-alto  { background: #ef4444; }
+    .zona-dot-medio { background: #f59e0b; }
+    .zona-dot-bajo  { background: #22c55e; }
+    /* Leyenda de zonas en el mapa */
+    .zona-legend-item { display: flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 600; }
+    .zona-legend-circle { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,.2); opacity: .8; }
+    /* Cluster icon */
+    .vs-cluster {
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; color: white; font-weight: 800;
+        font-size: 0.82rem; cursor: pointer;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.25);
+        border: 3px solid white;
+        transition: transform 0.15s;
+    }
+    .vs-cluster:hover { transform: scale(1.12); }
+    /* Spider lines */
+    .vs-spider-hint {
+        position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+        background: rgba(0,0,0,0.6); color: white; border-radius: 20px;
+        padding: 4px 14px; font-size: 0.75rem; pointer-events: none;
+        white-space: nowrap; z-index: 1000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h1 class="fw-bold mb-1"><i class="bi bi-speedometer2 me-3"></i>Dashboard de Accidentes</h1>
+                <p class="mb-0 opacity-75">Monitoreo y reporte de incidentes viales en tiempo real</p>
+            </div>
+            {% if user.is_authenticated %}
+            <a href="/accidente/nuevo/" class="btn btn-warning fw-semibold">
+                <i class="bi bi-plus-circle me-2"></i>Reportar Accidente
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Estadísticas -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-total">
+                <div class="stat-number">{{ total }}</div>
+                <div class="stat-label"><i class="bi bi-collection me-1"></i>Total Accidentes</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-baja">
+                <div class="stat-number">{{ total_baja }}</div>
+                <div class="stat-label"><i class="bi bi-check-circle me-1"></i>Gravedad Baja</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-media">
+                <div class="stat-number">{{ total_media }}</div>
+                <div class="stat-label"><i class="bi bi-exclamation-triangle me-1"></i>Gravedad Media</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-alta">
+                <div class="stat-number">{{ total_alta }}</div>
+                <div class="stat-label"><i class="bi bi-x-circle me-1"></i>Gravedad Alta</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mapa interactivo -->
+    <div class="map-container">
+        <div class="map-header">
+            <div>
+                <h5 class="fw-bold mb-0">
+                    <i class="bi bi-map me-2 text-primary"></i>Mapa de Accidentes
+                </h5>
+                <small class="text-muted">Pasa el cursor sobre un marcador para ver los detalles</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <!-- Botón de geolocalización -->
+                <button id="btn-mi-ubicacion" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+                        title="Centrar mapa en mi ubicación actual">
+                    <i class="bi bi-crosshair2"></i>
+                    <span class="d-none d-sm-inline">Mi ubicación</span>
+                </button>
+                <!-- Botón Zonas de riesgo -->
+                <button id="btn-toggle-zonas" class="btn btn-sm btn-outline-secondary zona-toggle-btn d-flex align-items-center gap-1"
+                        title="Mostrar/ocultar zonas de riesgo">
+                    <i class="bi bi-layers"></i>
+                    <span class="d-none d-sm-inline">Zonas de riesgo</span>
+                </button>
+                <div class="map-legend d-flex gap-3 align-items-center flex-wrap">
+                    <div class="d-flex align-items-center">
+                        <span class="legend-dot" style="background:#22c55e;"></span>
+                        <span class="small text-muted fw-semibold">Baja</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="legend-dot" style="background:#f59e0b;"></span>
+                        <span class="small text-muted fw-semibold">Media</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="legend-dot" style="background:#ef4444;"></span>
+                        <span class="small text-muted fw-semibold">Alta</span>
+                    </div>
+                    <!-- Leyenda de zonas (visible solo cuando zonas están activas) -->
+                    <div id="leyenda-zonas" class="d-none d-flex gap-2 flex-wrap border-start ps-3">
+                        <div class="zona-legend-item">
+                            <span class="zona-legend-circle" style="background:#ef4444;"></span>Zona alta
+                        </div>
+                        <div class="zona-legend-item">
+                            <span class="zona-legend-circle" style="background:#f59e0b;"></span>Zona media
+                        </div>
+                        <div class="zona-legend-item">
+                            <span class="zona-legend-circle" style="background:#22c55e;"></span>Zona baja
+                        </div>
+                    </div>
+                    <span id="mapa-contador" class="badge bg-primary bg-opacity-10 text-primary small fw-semibold">
+                        Cargando...
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div id="mapa-accidentes" style="position:relative;">
+            <div class="vs-spider-hint d-none" id="spider-hint">
+                <i class="bi bi-cursor-fill me-1"></i>Haz clic en el mapa para cerrar
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel de zonas de riesgo (oculto por defecto) -->
+    <div id="zonas-panel" class="zonas-panel d-none">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div>
+                <h6 class="fw-bold mb-0"><i class="bi bi-layers me-2 text-primary"></i>Análisis de Zonas Peligrosas</h6>
+                <small class="text-muted">Clasificación basada en densidad y gravedad de accidentes</small>
+            </div>
+            <span id="badge-metodo" class="badge bg-primary bg-opacity-10 text-primary small fw-semibold px-3 py-2">
+                <i class="bi bi-grid me-1"></i>Cuadrícula 300 m
+            </span>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-4">
+                <div class="zona-stat zona-alto rounded-3">
+                    <div class="zona-dot zona-dot-alto" id="cnt-alto">0</div>
+                    <div>
+                        <div class="fw-bold small">Zona Alta</div>
+                        <div class="text-muted" style="font-size:.75rem;">Riesgo crítico</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="zona-stat zona-medio rounded-3">
+                    <div class="zona-dot zona-dot-medio" id="cnt-medio">0</div>
+                    <div>
+                        <div class="fw-bold small">Zona Media</div>
+                        <div class="text-muted" style="font-size:.75rem;">Precaución</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="zona-stat zona-bajo rounded-3">
+                    <div class="zona-dot zona-dot-bajo" id="cnt-bajo">0</div>
+                    <div>
+                        <div class="fw-bold small">Zona Baja</div>
+                        <div class="text-muted" style="font-size:.75rem;">Relativamente seguro</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Tabla de zonas más peligrosas -->
+        <div>
+            <p class="small fw-semibold text-muted text-uppercase mb-2">Top zonas más peligrosas</p>
+            <div id="tabla-zonas-peligrosas"></div>
+        </div>
+    </div>
+
+    <!-- Buscador -->
+    <div class="search-box">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-7">
+                <label class="form-label fw-semibold small text-muted text-uppercase">
+                    <i class="bi bi-search me-1"></i>Buscar accidente
+                </label>
+                <input type="text" name="q" value="{{ busqueda }}" class="form-control"
+                    placeholder="Buscar por título, ubicación o descripción...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold small text-muted text-uppercase">
+                    <i class="bi bi-funnel me-1"></i>Gravedad
+                </label>
+                <select name="gravedad" class="form-select">
+                    <option value="">Todas</option>
+                    <option value="baja" {% if gravedad_filtro == 'baja' %}selected{% endif %}>Baja</option>
+                    <option value="media" {% if gravedad_filtro == 'media' %}selected{% endif %}>Media</option>
+                    <option value="alta" {% if gravedad_filtro == 'alta' %}selected{% endif %}>Alta</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill">
+                    <i class="bi bi-search"></i>
+                </button>
+                {% if busqueda or gravedad_filtro %}
+                <a href="/" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Tarjetas de accidentes -->
+    {% if accidentes %}
+    <div class="row g-3">
+        {% for accidente in accidentes %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 border-gravedad-{{ accidente.gravedad }}">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge badge-gravedad-{{ accidente.gravedad }} px-3 py-2">
+                            <i class="{{ accidente.get_gravedad_icon }} me-1"></i>
+                            {{ accidente.get_gravedad_display }}
+                        </span>
+                        <small class="text-muted">
+                            <i class="bi bi-calendar3 me-1"></i>{{ accidente.fecha|date:"d/m/Y" }}
+                        </small>
+                    </div>
+                    <h5 class="card-title fw-bold mt-1">{{ accidente.titulo }}</h5>
+                    <p class="text-muted small mb-2">
+                        <i class="bi bi-geo-alt-fill me-1 text-primary"></i>{{ accidente.ubicacion }}
+                    </p>
+                    <p class="card-text text-muted small flex-grow-1">
+                        {{ accidente.descripcion|truncatechars:120 }}
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-person me-1"></i>
+                            {{ accidente.reportado_por.get_full_name|default:accidente.reportado_por.username|default:"Anónimo" }}
+                        </small>
+                        <div class="d-flex gap-2 align-items-center">
+                            <small class="text-muted">
+                                <i class="bi bi-chat me-1"></i>{{ accidente.comentarios.count }}
+                            </small>
+                            {% if accidente.latitud %}
+                            <button class="btn btn-outline-secondary btn-sm ver-en-mapa"
+                                data-lat="{{ accidente.latitud }}"
+                                data-lng="{{ accidente.longitud }}"
+                                data-id="{{ accidente.pk }}"
+                                title="Ver en mapa">
+                                <i class="bi bi-geo-alt"></i>
+                            </button>
+                            {% endif %}
+                            <a href="/accidente/{{ accidente.pk }}/" class="btn btn-primary btn-sm">
+                                Ver más
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-search text-muted d-block"></i>
+        <h4 class="mt-3 text-muted">No se encontraron accidentes</h4>
+        {% if busqueda or gravedad_filtro %}
+        <p>Intenta con otros términos de búsqueda o <a href="/">ver todos</a>.</p>
+        {% else %}
+        <p>Aún no hay accidentes registrados.</p>
+        {% if user.is_authenticated %}
+        <a href="/accidente/nuevo/" class="btn btn-primary mt-2">
+            <i class="bi bi-plus-circle me-2"></i>Reportar el primer accidente
+        </a>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function () {
+    const mapEl = document.getElementById('mapa-accidentes');
+    if (!mapEl) return;
+
+    // ── Mapa ─────────────────────────────────────────────────────────────────
+    const mapa = L.map('mapa-accidentes', { zoomControl: true }).setView([4.6500, -74.0800], 11);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd', maxZoom: 19,
+    }).addTo(mapa);
+
+    // ── Configuración de gravedades ──────────────────────────────────────────
+    const CFG = {
+        baja:  { color: '#22c55e', dark: '#16a34a', label: 'Baja',  r: 12 },
+        media: { color: '#f59e0b', dark: '#d97706', label: 'Media', r: 14 },
+        alta:  { color: '#ef4444', dark: '#dc2626', label: 'Alta',  r: 16 },
+    };
+    const ORDEN_GRAVEDAD = { alta: 3, media: 2, baja: 1 };
+
+    // ── Agrupación de puntos (tolerancia 0.0001°  ≈ 11 m) ───────────────────
+    function agrupar(lista) {
+        const grupos = {}, TOL = 0.0001;
+        lista.forEach(a => {
+            let asignado = false;
+            for (const k of Object.keys(grupos)) {
+                const [klat, klng] = k.split(',').map(Number);
+                if (Math.abs(a.lat - klat) <= TOL && Math.abs(a.lng - klng) <= TOL) {
+                    grupos[k].push(a);
+                    asignado = true;
+                    break;
+                }
+            }
+            if (!asignado) grupos[`${a.lat},${a.lng}`] = [a];
+        });
+        return grupos;
+    }
+
+    // ── Posiciones en araña (spiderfy) ───────────────────────────────────────
+    function posicionesArana(lat, lng, total) {
+        if (total === 1) return [[lat, lng]];
+        const RADIO_PX = 55;          // radio del despliegue en píxeles
+        const punto = mapa.latLngToLayerPoint([lat, lng]);
+        const pos = [];
+        for (let i = 0; i < total; i++) {
+            const ang = (2 * Math.PI * i) / total - Math.PI / 2;
+            const px  = punto.x + RADIO_PX * Math.cos(ang);
+            const py  = punto.y + RADIO_PX * Math.sin(ang);
+            pos.push(mapa.layerPointToLatLng([px, py]));
+        }
+        return pos;
+    }
+
+    // ── Popup HTML ───────────────────────────────────────────────────────────
+    function buildPopup(a) {
+        const c = CFG[a.gravedad] || CFG.media;
+        return `
+        <div class="popup-header" style="background:${c.color};">
+            <div style="font-size:0.7rem;opacity:.9;font-weight:500;letter-spacing:.5px;text-transform:uppercase;">Accidente vial</div>
+            <div style="font-size:0.95rem;">${a.titulo}</div>
+        </div>
+        <div class="popup-body">
+            <span class="popup-badge" style="background:${c.color};">● Gravedad ${c.label}</span>
+            <p><i class="bi bi-geo-alt" style="color:#6b7280;"></i> <strong>${a.ubicacion}</strong></p>
+            <p style="color:#6b7280;line-height:1.4;">${a.descripcion.substring(0,120)}${a.descripcion.length>120?'…':''}</p>
+            <p style="color:#9ca3af;font-size:.75rem;">
+                <i class="bi bi-calendar3"></i> ${a.fecha} &nbsp;·&nbsp;
+                <i class="bi bi-person"></i> ${a.reportado_por}
+            </p>
+            <a href="${a.url}" class="popup-link"><i class="bi bi-arrow-right-circle me-1"></i>Ver detalle completo</a>
+        </div>`;
+    }
+
+    // ── Color de cluster (gravedad más alta del grupo) ────────────────────────
+    function colorCluster(grupo) {
+        return grupo.reduce((acc, a) => (ORDEN_GRAVEDAD[a.gravedad]||0) > (ORDEN_GRAVEDAD[acc.gravedad]||0) ? a : acc).gravedad;
+    }
+
+    // ── Estado global de araña ────────────────────────────────────────────────
+    let aranaActiva = null;   // { piernas: [], marcadores: [], clusterMarker }
+    const marcadores = {};    // { id → { marcador, lat, lng } } para "ver en mapa"
+    const hint = document.getElementById('spider-hint');
+
+    function cerrarArana() {
+        if (!aranaActiva) return;
+        aranaActiva.piernas.forEach(l => mapa.removeLayer(l));
+        aranaActiva.marcadores.forEach(m => mapa.removeLayer(m));
+        if (aranaActiva.pulso) mapa.removeLayer(aranaActiva.pulso);
+        aranaActiva.clusterMarker.setOpacity(1);
+        aranaActiva = null;
+        if (hint) hint.classList.add('d-none');
+    }
+
+    function abrirArana(grupo, clusterMarker, lat, lng) {
+        cerrarArana();
+
+        const posiciones = posicionesArana(lat, lng, grupo.length);
+        const piernas = [];
+        const mkrs = [];
+
+        // Mostrar pista de cierre
+        if (hint) hint.classList.remove('d-none');
+        clusterMarker.setOpacity(0.55);
+
+        grupo.forEach((a, i) => {
+            const c  = CFG[a.gravedad] || CFG.media;
+            const ll = posiciones[i];
+
+            // Línea de araña
+            const linea = L.polyline([[lat, lng], ll], {
+                color: c.color, weight: 2.5, opacity: 0.7,
+                dashArray: '5,4',
+            }).addTo(mapa);
+            piernas.push(linea);
+
+            // Anillo pulsante para alta gravedad
+            if (a.gravedad === 'alta') {
+                const pulso = L.circleMarker(ll, {
+                    radius: c.r + 7, color: c.color, weight: 2,
+                    fillColor: c.color, fillOpacity: 0.15,
+                    className: 'pulse-ring', interactive: false,
+                }).addTo(mapa);
+                piernas.push(pulso);
+            }
+
+            // Marcador individual (tamaño normal)
+            const mk = L.circleMarker(ll, {
+                radius: c.r, color: c.dark, weight: 2.5,
+                fillColor: c.color, fillOpacity: 0.9,
+            }).addTo(mapa);
+
+            mk.bindPopup(L.popup({
+                maxWidth: 260, minWidth: 240,
+                closeButton: true, className: 'vs-popup',
+                autoPanPadding: [40, 40],
+            }).setContent(buildPopup(a)));
+
+            mk.on('click',     function (e) { L.DomEvent.stopPropagation(e); this.openPopup(); });
+            mk.on('mouseover', function () { this.setStyle({ radius: c.r + 3, fillOpacity: 1 }); this.openPopup(); });
+            mk.on('mouseout',  function () { if (!this.isPopupOpen()) this.setStyle({ radius: c.r, fillOpacity: 0.9 }); });
+            mk.on('popupclose',function () { this.setStyle({ radius: c.r, fillOpacity: 0.9 }); });
+
+            mkrs.push(mk);
+            marcadores[a.id] = { marcador: mk, lat: ll.lat, lng: ll.lng };
+        });
+
+        aranaActiva = { piernas, marcadores: mkrs, clusterMarker };
+    }
+
+    // ── Marcador de un solo accidente ────────────────────────────────────────
+    function crearMarcadorSimple(a) {
+        const c = CFG[a.gravedad] || CFG.media;
+
+        if (a.gravedad === 'alta') {
+            L.circleMarker([a.lat, a.lng], {
+                radius: c.r + 7, color: c.color, weight: 2,
+                fillColor: c.color, fillOpacity: 0.15,
+                className: 'pulse-ring', interactive: false,
+            }).addTo(mapa);
+        }
+
+        const mk = L.circleMarker([a.lat, a.lng], {
+            radius: c.r, color: c.dark, weight: 2.5,
+            fillColor: c.color, fillOpacity: 0.88,
+        }).addTo(mapa);
+
+        mk.bindPopup(L.popup({
+            maxWidth: 260, minWidth: 240,
+            closeButton: true, className: 'vs-popup',
+            autoPanPadding: [40, 40],
+        }).setContent(buildPopup(a)));
+
+        mk.on('mouseover', function () { this.setStyle({ radius: c.r + 3, fillOpacity: 1 }); this.openPopup(); });
+        mk.on('click',     function () { this.openPopup(); });
+        mk.on('mouseout',  function () { if (!this.isPopupOpen()) this.setStyle({ radius: c.r, fillOpacity: 0.88 }); });
+        mk.on('popupclose',function () { this.setStyle({ radius: c.r, fillOpacity: 0.88 }); });
+
+        marcadores[a.id] = { marcador: mk, lat: a.lat, lng: a.lng };
+    }
+
+    // ── Cluster (grupo ≥ 2 accidentes) ───────────────────────────────────────
+    function crearCluster(grupo, lat, lng) {
+        const grav  = colorCluster(grupo);
+        const c     = CFG[grav] || CFG.media;
+        const total = grupo.length;
+        const sz    = 36 + Math.min(total, 10) * 2;   // tamaño crece con el grupo
+
+        const icon = L.divIcon({
+            html: `<div class="vs-cluster" style="width:${sz}px;height:${sz}px;background:${c.color};font-size:${sz > 44 ? '1rem':'0.82rem'};">
+                       ${total}
+                   </div>`,
+            iconSize:   [sz, sz],
+            iconAnchor: [sz/2, sz/2],
+            className: '',
+        });
+
+        const cm = L.marker([lat, lng], { icon }).addTo(mapa);
+
+        // Tooltip de resumen
+        const resumen = grupo.map(a => `• ${a.titulo}`).join('<br>');
+        cm.bindTooltip(
+            `<strong>${total} accidentes en este punto</strong><br><span style="font-size:.8rem;color:#6b7280;">${resumen}</span>`,
+            { direction: 'top', offset: [0, -(sz/2+4)], opacity: 0.97 }
+        );
+
+        cm.on('click', function (e) {
+            L.DomEvent.stopPropagation(e);
+            // Si ya está desplegado este cluster, cerrarlo
+            if (aranaActiva && aranaActiva.clusterMarker === this) {
+                cerrarArana();
+            } else {
+                mapa.setView([lat, lng], mapa.getZoom(), { animate: true });
+                abrirArana(grupo, this, lat, lng);
+            }
+        });
+
+        return cm;
+    }
+
+    // ── Carga de datos ───────────────────────────────────────────────────────
+    fetch('/mapa/datos/')
+        .then(r => r.json())
+        .then(({ accidentes }) => {
+            const counter = document.getElementById('mapa-contador');
+            if (counter) counter.textContent = `${accidentes.length} accidente${accidentes.length !== 1 ? 's' : ''} en el mapa`;
+            if (!accidentes.length) return;
+
+            const grupos = agrupar(accidentes);
+
+            Object.entries(grupos).forEach(([key, grupo]) => {
+                const [lat, lng] = key.split(',').map(Number);
+                if (grupo.length === 1) {
+                    crearMarcadorSimple(grupo[0]);
+                } else {
+                    crearCluster(grupo, lat, lng);
+                }
+            });
+
+            const bounds = L.latLngBounds(accidentes.map(a => [a.lat, a.lng]));
+            mapa.fitBounds(bounds.pad(0.25));
+
+            // Pre-calcular zonas (disponibles para cuando el usuario las active)
+            zonasCalculadas = clasificarZonas(accidentes);
+            actualizarPanelZonas(zonasCalculadas);
+        })
+        .catch(err => console.error('Error cargando mapa:', err));
+
+    // ── Clasificación de zonas de riesgo ─────────────────────────────────────
+    // Algoritmo: cuadrícula de ~300 m. Cada celda con accidentes = una zona.
+    // Puntuación: alta=5, media=2, baja=1
+    // Clasificación: ≥8 → alto, 3-7 → medio, 1-2 → bajo
+    const CELDA_GRADOS = 0.0027;  // ≈ 300 m a latitud ~5°N
+    const PTS = { alta: 5, media: 2, baja: 1 };
+
+    let capasZonas = [];
+    let zonasVisibles = false;
+    let zonasCalculadas = [];  // se llena una vez que llegan los datos
+
+    function clasificarZonas(accidentes) {
+        const celdas = {};
+        accidentes.forEach(a => {
+            const ci = Math.floor(a.lat / CELDA_GRADOS);
+            const cj = Math.floor(a.lng / CELDA_GRADOS);
+            const key = `${ci},${cj}`;
+            if (!celdas[key]) celdas[key] = { lats: [], lngs: [], score: 0, accidentes: [] };
+            celdas[key].lats.push(a.lat);
+            celdas[key].lngs.push(a.lng);
+            celdas[key].score += PTS[a.gravedad] || 1;
+            celdas[key].accidentes.push(a);
+        });
+
+        return Object.values(celdas).map(c => {
+            const lat = c.lats.reduce((s, v) => s + v, 0) / c.lats.length;
+            const lng = c.lngs.reduce((s, v) => s + v, 0) / c.lngs.length;
+            let nivel = c.score >= 8 ? 'alto' : c.score >= 3 ? 'medio' : 'bajo';
+            return { lat, lng, score: c.score, nivel, accidentes: c.accidentes };
+        }).sort((a, b) => b.score - a.score);
+    }
+
+    function renderizarZonas(zonas) {
+        // Limpiar capas previas
+        capasZonas.forEach(l => mapa.removeLayer(l));
+        capasZonas = [];
+
+        const COL = { alto: '#ef4444', medio: '#f59e0b', bajo: '#22c55e' };
+        const DARK = { alto: '#dc2626', medio: '#d97706', bajo: '#16a34a' };
+        const RADIO_BASE = { alto: 380, medio: 320, bajo: 260 };  // metros
+
+        zonas.forEach(z => {
+            const col  = COL[z.nivel];
+            const dark = DARK[z.nivel];
+            const r    = RADIO_BASE[z.nivel] + Math.min(z.score * 18, 200);
+
+            // Anillo exterior difuso
+            const anillo = L.circle([z.lat, z.lng], {
+                radius: r + 80, color: col, weight: 0,
+                fillColor: col, fillOpacity: 0.06, interactive: false,
+            }).addTo(mapa);
+
+            // Círculo principal
+            const circulo = L.circle([z.lat, z.lng], {
+                radius: r, color: dark, weight: 1.5,
+                fillColor: col, fillOpacity: 0.18,
+                dashArray: z.nivel === 'alto' ? null : '6,4',
+            }).addTo(mapa);
+
+            // Tooltip de la zona
+            const accStr = z.accidentes.slice(0, 3)
+                .map(a => `<li>${a.titulo}</li>`).join('');
+            const mas = z.accidentes.length > 3 ? `<li style="color:#9ca3af">…y ${z.accidentes.length - 3} más</li>` : '';
+            circulo.bindTooltip(`
+                <div style="min-width:200px;">
+                    <div style="font-weight:700;color:${col};font-size:.9rem;margin-bottom:4px;">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        Zona de Riesgo ${z.nivel.charAt(0).toUpperCase() + z.nivel.slice(1)}
+                    </div>
+                    <div style="font-size:.8rem;color:#4b5563;margin-bottom:4px;">
+                        <strong>${z.accidentes.length}</strong> accidente${z.accidentes.length !== 1 ? 's' : ''}
+                        · Puntuación: <strong>${z.score}</strong>
+                    </div>
+                    <ul style="font-size:.78rem;color:#6b7280;padding-left:16px;margin:0;">${accStr}${mas}</ul>
+                </div>
+            `, { direction: 'top', opacity: 0.97 });
+
+            capasZonas.push(anillo, circulo);
+        });
+    }
+
+    function actualizarPanelZonas(zonas) {
+        const alto  = zonas.filter(z => z.nivel === 'alto');
+        const medio = zonas.filter(z => z.nivel === 'medio');
+        const bajo  = zonas.filter(z => z.nivel === 'bajo');
+
+        document.getElementById('cnt-alto').textContent  = alto.length;
+        document.getElementById('cnt-medio').textContent = medio.length;
+        document.getElementById('cnt-bajo').textContent  = bajo.length;
+
+        // Top 5 zonas más peligrosas
+        const tabla = document.getElementById('tabla-zonas-peligrosas');
+        const COL = { alto: '#ef4444', medio: '#f59e0b', bajo: '#22c55e' };
+        const LABEL = { alto: 'Alta', medio: 'Media', bajo: 'Baja' };
+        tabla.innerHTML = zonas.slice(0, 5).map((z, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+                <span style="width:22px;height:22px;border-radius:50%;background:${COL[z.nivel]};color:white;
+                      font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    ${i + 1}
+                </span>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:.82rem;font-weight:600;color:${COL[z.nivel]};">
+                        Zona ${LABEL[z.nivel]} — ${z.accidentes.length} accidente${z.accidentes.length !== 1 ? 's' : ''}
+                    </div>
+                    <div style="font-size:.74rem;color:#9ca3af;">
+                        Puntuación de riesgo: ${z.score} pts
+                        · ${z.lat.toFixed(4)}°N, ${Math.abs(z.lng).toFixed(4)}°O
+                    </div>
+                </div>
+                <span style="background:${COL[z.nivel]}22;color:${COL[z.nivel]};
+                      border-radius:20px;padding:2px 10px;font-size:.72rem;font-weight:700;white-space:nowrap;">
+                    ${z.score} pts
+                </span>
+            </div>
+        `).join('');
+
+        if (!zonas.length) {
+            tabla.innerHTML = '<div class="text-center text-muted small py-2">Sin datos de zonas.</div>';
+        }
+    }
+
+    function mostrarZonas() {
+        zonasVisibles = true;
+        renderizarZonas(zonasCalculadas);
+        document.getElementById('zonas-panel').classList.remove('d-none');
+        document.getElementById('leyenda-zonas').classList.remove('d-none');
+        const btn = document.getElementById('btn-toggle-zonas');
+        btn.classList.add('activo');
+        btn.innerHTML = '<i class="bi bi-layers-fill"></i><span class="d-none d-sm-inline"> Ocultar zonas</span>';
+    }
+
+    function ocultarZonas() {
+        zonasVisibles = false;
+        capasZonas.forEach(l => mapa.removeLayer(l));
+        capasZonas = [];
+        document.getElementById('zonas-panel').classList.add('d-none');
+        document.getElementById('leyenda-zonas').classList.add('d-none');
+        const btn = document.getElementById('btn-toggle-zonas');
+        btn.classList.remove('activo');
+        btn.innerHTML = '<i class="bi bi-layers"></i><span class="d-none d-sm-inline"> Zonas de riesgo</span>';
+    }
+
+    document.getElementById('btn-toggle-zonas').addEventListener('click', () => {
+        if (zonasVisibles) ocultarZonas(); else mostrarZonas();
+    });
+
+    // Cerrar araña al hacer clic en el mapa
+    mapa.on('click', cerrarArana);
+
+    // ── Geolocalización: botón "Mi ubicación" ────────────────────────────────
+    const btnUbicacion = document.getElementById('btn-mi-ubicacion');
+    let marcadorUsuario = null;
+
+    if (btnUbicacion) {
+        btnUbicacion.addEventListener('click', function () {
+            if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return; }
+            btnUbicacion.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Localizando...';
+            btnUbicacion.disabled = true;
+
+            navigator.geolocation.getCurrentPosition(
+                function (pos) {
+                    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                    const icono = L.divIcon({
+                        html: `<div style="width:22px;height:22px;border-radius:50%;background:#2563eb;border:3px solid white;box-shadow:0 0 0 4px rgba(37,99,235,0.3);"></div>`,
+                        iconSize: [22,22], iconAnchor: [11,11], className: ''
+                    });
+                    if (marcadorUsuario) {
+                        marcadorUsuario.setLatLng([lat, lng]);
+                    } else {
+                        marcadorUsuario = L.marker([lat, lng], { icon: icono }).addTo(mapa)
+                            .bindPopup('<strong><i class="bi bi-person-fill me-1"></i>Tu ubicación actual</strong>').openPopup();
+                    }
+                    mapa.setView([lat, lng], 14, { animate: true, duration: 1 });
+                    btnUbicacion.innerHTML = '<i class="bi bi-crosshair2"></i><span class="d-none d-sm-inline"> Mi ubicación</span>';
+                    btnUbicacion.disabled = false;
+                    btnUbicacion.classList.replace('btn-outline-primary', 'btn-primary');
+                },
+                function (err) {
+                    let msg = 'No se pudo obtener tu ubicación.';
+                    if (err.code === 1) msg = 'Permiso de ubicación denegado.';
+                    if (err.code === 2) msg = 'Ubicación no disponible.';
+                    alert(msg);
+                    btnUbicacion.innerHTML = '<i class="bi bi-crosshair2"></i><span class="d-none d-sm-inline"> Mi ubicación</span>';
+                    btnUbicacion.disabled = false;
+                },
+                { timeout: 10000, enableHighAccuracy: true }
+            );
+        });
+    }
+
+    // ── Botón "Ver en mapa" desde las tarjetas ───────────────────────────────
+    document.querySelectorAll('.ver-en-mapa').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const lat = parseFloat(this.dataset.lat);
+            const lng = parseFloat(this.dataset.lng);
+            const id  = parseInt(this.dataset.id);
+            cerrarArana();
+            mapa.setView([lat, lng], 15, { animate: true, duration: 0.8 });
+            setTimeout(() => {
+                if (marcadores[id]) marcadores[id].marcador.openPopup();
+            }, 900);
+            mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    });
+})();
+</script>
+{% endblock %}

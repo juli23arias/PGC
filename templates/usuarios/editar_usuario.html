@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Editar Usuario - Vías Seguras{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <h1 class="fw-bold mb-0"><i class="bi bi-pencil me-3"></i>Editar Usuario</h1>
+    </div>
+</div>
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white"><i class="bi bi-person me-2"></i>{{ usuario.username }}</div>
+                <div class="card-body p-4">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Nombre</label>
+                            <input type="text" name="first_name" class="form-control" value="{{ usuario.first_name }}" placeholder="Nombre">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Apellido</label>
+                            <input type="text" name="last_name" class="form-control" value="{{ usuario.last_name }}" placeholder="Apellido">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Correo electrónico</label>
+                            <input type="email" name="email" class="form-control" value="{{ usuario.email }}" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Rol</label>
+                            <select name="rol" class="form-select">
+                                <option value="usuario" {% if perfil.rol == 'usuario' %}selected{% endif %}>Usuario normal</option>
+                                <option value="administrador" {% if perfil.rol == 'administrador' %}selected{% endif %}>Administrador</option>
+                            </select>
+                        </div>
+                        <div class="d-flex gap-3 mt-4">
+                            <button type="submit" class="btn btn-primary px-4"><i class="bi bi-save me-2"></i>Guardar cambios</button>
+                            <a href="/usuarios/gestion/" class="btn btn-outline-secondary"><i class="bi bi-x me-2"></i>Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

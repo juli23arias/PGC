@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }} - Vías Seguras{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+    #mapa-selector {
+        height: 320px;
+        border-radius: 12px;
+        border: 2px solid #e5e7eb;
+        cursor: crosshair;
+        transition: border-color 0.2s;
+    }
+    #mapa-selector.tiene-punto {
+        border-color: #22c55e;
+    }
+    #mapa-selector.tiene-punto:after {
+        content: '';
+    }
+    .mapa-hint {
+        background: #f0fdf4;
+        border: 1px solid #86efac;
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 0.83rem;
+        color: #166534;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .mapa-hint.no-coord {
+        background: #fffbeb;
+        border-color: #fcd34d;
+        color: #92400e;
+    }
+    .btn-geocode {
+        border-radius: 0 6px 6px 0;
+        min-width: 42px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+                <li class="breadcrumb-item"><a href="/" class="text-white-50">Dashboard</a></li>
+                <li class="breadcrumb-item active text-white">{{ titulo }}</li>
+            </ol>
+        </nav>
+        <h1 class="fw-bold mb-0">
+            <i class="bi bi-{% if accidente %}pencil{% else %}plus-circle{% endif %} me-3"></i>{{ titulo }}
+        </h1>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-file-earmark-text me-2"></i>Información del accidente
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" novalidate id="form-accidente">
+                        {% csrf_token %}
+
+                        <!-- Campos del formulario (excepto latitud y longitud ocultos) -->
+                        {% for field in form %}
+                            {% if field.name == 'latitud' or field.name == 'longitud' %}
+                                {{ field }}
+                            {% elif field.name == 'ubicacion' %}
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">
+                                    {{ field.label }}<span class="text-danger ms-1">*</span>
+                                </label>
+                                <div class="input-group">
+                                    {{ field }}
+                                    <button type="button" class="btn btn-outline-primary btn-geocode"
+                                        id="btn-geocodificar" title="Geocodificar dirección">
+                                        <i class="bi bi-geo-alt-fill"></i>
+                                    </button>
+                                </div>
+                                {% if field.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in field.errors %}<i class="bi bi-exclamation-circle me-1"></i>{{ error }}<br>{% endfor %}
+                                </div>
+                                {% endif %}
+                                <div class="text-muted small mt-1">Escribe la dirección y pulsa <i class="bi bi-geo-alt-fill text-primary"></i> para ubicarla en el mapa.</div>
+                            </div>
+                            {% else %}
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">
+                                    {{ field.label }}
+                                    {% if field.field.required %}<span class="text-danger ms-1">*</span>{% endif %}
+                                </label>
+                                {{ field }}
+                                {% if field.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in field.errors %}<i class="bi bi-exclamation-circle me-1"></i>{{ error }}<br>{% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+
+                        <!-- Mapa interactivo para ubicar el accidente -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-map me-1 text-primary"></i>Ubicación en el mapa
+                            </label>
+                            <!-- Botón Usar mi ubicación actual -->
+                            <button type="button" id="btn-usar-ubicacion"
+                                class="btn btn-outline-primary mb-3 d-flex align-items-center gap-2">
+                                <i class="bi bi-crosshair2"></i>
+                                <span>Usar mi ubicación actual</span>
+                            </button>
+                            <div id="estado-coordenadas" class="mapa-hint no-coord mb-2">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                <span id="txt-estado">Sin coordenadas — geocodifica la dirección o haz clic en el mapa para marcar la ubicación.</span>
+                            </div>
+                            <div id="mapa-selector"></div>
+                        </div>
+
+                        <div class="d-flex gap-3 mt-4">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-save me-2"></i>{{ accion }}
+                            </button>
+                            {% if accidente %}
+                            <a href="/accidente/{{ accidente.pk }}/" class="btn btn-outline-secondary">
+                                <i class="bi bi-x me-2"></i>Cancelar
+                            </a>
+                            {% else %}
+                            <a href="/" class="btn btn-outline-secondary">
+                                <i class="bi bi-x me-2"></i>Cancelar
+                            </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-body d-flex gap-3 align-items-center">
+                    <i class="bi bi-info-circle text-primary fs-4"></i>
+                    <div>
+                        <strong>Guía de gravedad:</strong>
+                        <span class="badge badge-gravedad-baja ms-2">Baja</span> sin heridos graves
+                        <span class="badge badge-gravedad-media ms-2">Media</span> heridos leves
+                        <span class="badge badge-gravedad-alta ms-2">Alta</span> heridos graves o fallecidos
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function () {
+    // ── Coordenadas iniciales (Bogotá por defecto, o las del accidente) ──────
+    const latInicial = parseFloat(document.getElementById('id_latitud').value) || 4.6500;
+    const lngInicial = parseFloat(document.getElementById('id_longitud').value) || -74.0800;
+    const tieneCoords = !!document.getElementById('id_latitud').value;
+
+    // ── Inicializar mapa ─────────────────────────────────────────────────────
+    const mapa = L.map('mapa-selector').setView([latInicial, lngInicial], tieneCoords ? 14 : 11);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap © CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19,
+    }).addTo(mapa);
+
+    // ── Ícono de marcador personalizado ──────────────────────────────────────
+    const iconoMarcador = L.divIcon({
+        html: `<div style="
+            width:28px; height:28px; border-radius:50% 50% 50% 0;
+            background:#ef4444; border:3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transform: rotate(-45deg);
+        "></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+        className: ''
+    });
+
+    let marcador = null;
+
+    // ── Restaurar marcador si ya tiene coordenadas (modo edición) ────────────
+    if (tieneCoords) {
+        marcador = L.marker([latInicial, lngInicial], { icon: iconoMarcador }).addTo(mapa);
+        actualizarEstado(latInicial, lngInicial);
+    }
+
+    // ── Clic en el mapa para colocar marcador ────────────────────────────────
+    mapa.on('click', function (e) {
+        colocarMarcador(e.latlng.lat, e.latlng.lng);
+    });
+
+    // ── Botón geocodificar dirección ─────────────────────────────────────────
+    document.getElementById('btn-geocodificar').addEventListener('click', function () {
+        const direccion = document.getElementById('id_ubicacion').value.trim();
+        if (!direccion) {
+            alert('Escribe la dirección en el campo "Ubicación" antes de geocodificar.');
+            return;
+        }
+
+        const btn = this;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        btn.disabled = true;
+
+        // Nominatim (OpenStreetMap) — gratuito, sin clave
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion)}&countrycodes=co&limit=1`;
+
+        fetch(url, { headers: { 'Accept-Language': 'es' } })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    const lat = parseFloat(data[0].lat);
+                    const lng = parseFloat(data[0].lon);
+                    colocarMarcador(lat, lng);
+                    mapa.setView([lat, lng], 15, { animate: true });
+                } else {
+                    alert('No se encontró la dirección. Intenta ser más específico o haz clic en el mapa.');
+                }
+            })
+            .catch(() => alert('Error al geocodificar. Verifica tu conexión o haz clic en el mapa manualmente.'))
+            .finally(() => {
+                btn.innerHTML = '<i class="bi bi-geo-alt-fill"></i>';
+                btn.disabled = false;
+            });
+    });
+
+    // ── Botón "Usar mi ubicación actual" ────────────────────────────────────
+    const btnUbicacion = document.getElementById('btn-usar-ubicacion');
+    if (btnUbicacion) {
+        btnUbicacion.addEventListener('click', function () {
+            if (!navigator.geolocation) {
+                alert('Tu navegador no soporta geolocalización.');
+                return;
+            }
+            this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Obteniendo ubicación...';
+            this.disabled = true;
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    colocarMarcador(lat, lng);
+                    mapa.setView([lat, lng], 16, { animate: true });
+
+                    // Geocodificación inversa para autocompletar la dirección
+                    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=es`;
+                    fetch(url).then(r => r.json()).then(data => {
+                        if (data && data.display_name) {
+                            const campo = document.getElementById('id_ubicacion');
+                            if (campo && !campo.value) {
+                                campo.value = data.display_name.split(',').slice(0,3).join(', ');
+                            }
+                        }
+                    }).catch(() => {});
+
+                    this.innerHTML = '<i class="bi bi-crosshair2 text-success"></i> Ubicación obtenida';
+                    this.disabled = false;
+                },
+                (err) => {
+                    let msg = 'No se pudo obtener tu ubicación.';
+                    if (err.code === 1) msg = 'Permiso denegado. Actívalo en la configuración del navegador.';
+                    if (err.code === 2) msg = 'Ubicación no disponible.';
+                    alert(msg);
+                    this.innerHTML = '<i class="bi bi-crosshair2"></i> Usar mi ubicación actual';
+                    this.disabled = false;
+                },
+                { timeout: 10000, enableHighAccuracy: true }
+            );
+        });
+    }
+
+    // ── Funciones auxiliares ─────────────────────────────────────────────────
+    function colocarMarcador(lat, lng) {
+        if (marcador) {
+            marcador.setLatLng([lat, lng]);
+        } else {
+            marcador = L.marker([lat, lng], { icon: iconoMarcador }).addTo(mapa);
+        }
+        document.getElementById('id_latitud').value  = lat.toFixed(6);
+        document.getElementById('id_longitud').value = lng.toFixed(6);
+        actualizarEstado(lat, lng);
+        document.getElementById('mapa-selector').classList.add('tiene-punto');
+    }
+
+    function actualizarEstado(lat, lng) {
+        const el  = document.getElementById('estado-coordenadas');
+        const txt = document.getElementById('txt-estado');
+        el.classList.remove('no-coord');
+        el.classList.add('mapa-hint');
+        el.style.background = '#f0fdf4';
+        el.style.borderColor = '#86efac';
+        el.style.color = '#166534';
+        txt.textContent = `✓ Coordenadas: ${lat.toFixed(5)}, ${lng.toFixed(5)} — Haz clic en el mapa para ajustar.`;
+    }
+})();
+</script>
+{% endblock %}

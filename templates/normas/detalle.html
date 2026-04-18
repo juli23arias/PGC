@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ norma.titulo }} - Vías Seguras{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+                <li class="breadcrumb-item"><a href="/normas/" class="text-white-50">Normas</a></li>
+                <li class="breadcrumb-item active text-white">{{ norma.titulo|truncatechars:40 }}</li>
+            </ol>
+        </nav>
+        <div class="d-flex align-items-start justify-content-between">
+            <div>
+                <span class="badge bg-light text-dark px-3 py-2 mb-2">
+                    <i class="{{ norma.get_categoria_icon }} me-1"></i>
+                    {{ norma.get_categoria_display }}
+                </span>
+                <h1 class="fw-bold mb-1">{{ norma.titulo }}</h1>
+                {% if norma.articulo %}
+                <p class="opacity-75"><i class="bi bi-bookmark me-2"></i>{{ norma.articulo }}</p>
+                {% endif %}
+            </div>
+            {% if user.is_authenticated and user.perfil.es_administrador %}
+            <div class="d-flex gap-2">
+                <a href="/normas/norma/{{ norma.pk }}/editar/" class="btn btn-warning btn-sm">
+                    <i class="bi bi-pencil me-1"></i>Editar
+                </a>
+                <a href="/normas/norma/{{ norma.pk }}/eliminar/" class="btn btn-danger btn-sm">
+                    <i class="bi bi-trash me-1"></i>Eliminar
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-file-text me-2"></i>Descripción completa
+                </div>
+                <div class="card-body p-4">
+                    <p style="line-height: 1.9; font-size: 1.05rem;">{{ norma.descripcion }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-info-circle me-2 text-primary"></i>Detalles
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0 small">
+                        <dt class="col-5 text-muted">Categoría</dt>
+                        <dd class="col-7">
+                            <span class="badge bg-{{ norma.get_categoria_color }}">
+                                {{ norma.get_categoria_display }}
+                            </span>
+                        </dd>
+                        {% if norma.articulo %}
+                        <dt class="col-5 text-muted">Artículo</dt>
+                        <dd class="col-7 fw-semibold">{{ norma.articulo }}</dd>
+                        {% endif %}
+                        <dt class="col-5 text-muted">Agregada</dt>
+                        <dd class="col-7 fw-semibold">{{ norma.fecha_creacion|date:"d/m/Y" }}</dd>
+                    </dl>
+                </div>
+            </div>
+            <a href="/normas/" class="btn btn-outline-primary w-100">
+                <i class="bi bi-arrow-left me-2"></i>Volver a normas
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

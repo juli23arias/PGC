@@ -1,0 +1,20 @@
+kind = "web"
+previewPath = "/"
+title = "Vías Seguras"
+version = "1.0.0"
+id = "vias-seguras-django-app"
+
+[[services]]
+localPort = 3000
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "cd /home/runner/workspace/artifacts/vias-seguras && python manage.py runserver 0.0.0.0:$PORT"
+
+[services.production.run]
+args = ["bash", "/home/runner/workspace/artifacts/vias-seguras/start.sh"]
+
+[services.production.run.env]
+PORT = "3000"
+DJANGO_SETTINGS_MODULE = "vias_seguras.settings"

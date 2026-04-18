@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ accidente.titulo }} - Vías Seguras{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-2">
+                <li class="breadcrumb-item"><a href="/" class="text-white-50">Dashboard</a></li>
+                <li class="breadcrumb-item active text-white">{{ accidente.titulo|truncatechars:40 }}</li>
+            </ol>
+        </nav>
+        <div class="d-flex align-items-start justify-content-between">
+            <div>
+                <span class="badge badge-gravedad-{{ accidente.gravedad }} px-3 py-2 mb-2 fs-6">
+                    <i class="{{ accidente.get_gravedad_icon }} me-1"></i>
+                    Gravedad {{ accidente.get_gravedad_display }}
+                </span>
+                <h1 class="fw-bold mb-1">{{ accidente.titulo }}</h1>
+                <p class="opacity-75 mb-0">
+                    <i class="bi bi-geo-alt me-1"></i>{{ accidente.ubicacion }}
+                    <span class="mx-2">•</span>
+                    <i class="bi bi-calendar me-1"></i>{{ accidente.fecha|date:"d/m/Y H:i" }}
+                </p>
+            </div>
+            {% if user.is_authenticated %}
+            {% if user == accidente.reportado_por or user.perfil.es_administrador %}
+            <div class="d-flex gap-2">
+                <a href="/accidente/{{ accidente.pk }}/editar/" class="btn btn-warning btn-sm">
+                    <i class="bi bi-pencil me-1"></i>Editar
+                </a>
+                <a href="/accidente/{{ accidente.pk }}/eliminar/" class="btn btn-danger btn-sm">
+                    <i class="bi bi-trash me-1"></i>Eliminar
+                </a>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-file-text me-2"></i>Descripción del accidente
+                </div>
+                <div class="card-body">
+                    <p class="mb-0" style="line-height: 1.8;">{{ accidente.descripcion }}</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">
+                        <i class="bi bi-chat-dots me-2 text-primary"></i>
+                        Comentarios ({{ comentarios.count }})
+                    </span>
+                </div>
+                <div class="card-body">
+                    {% if user.is_authenticated %}
+                    <form method="post" action="/comentarios/accidente/{{ accidente.pk }}/comentar/" class="mb-4">
+                        {% csrf_token %}
+                        <label class="form-label fw-semibold">
+                            <i class="bi bi-pencil-square me-1 text-primary"></i>Agregar comentario
+                        </label>
+                        <textarea name="contenido" class="form-control mb-2" rows="3"
+                            placeholder="Comparte tu opinión o información adicional sobre este accidente..."></textarea>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-send me-1"></i>Publicar comentario
+                        </button>
+                    </form>
+                    <hr>
+                    {% else %}
+                    <div class="alert alert-info mb-4">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <a href="/usuarios/login/" class="fw-semibold">Inicia sesión</a> para comentar.
+                    </div>
+                    {% endif %}
+
+                    {% if comentarios %}
+                    {% for comentario in comentarios %}
+                    <div class="comment-card">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width:32px;height:32px;font-size:0.8rem;font-weight:600;flex-shrink:0;">
+                                    {{ comentario.autor.first_name|first|upper|default:comentario.autor.username|first|upper }}
+                                </div>
+                                <div>
+                                    <span class="fw-semibold small">{{ comentario.autor.get_full_name|default:comentario.autor.username }}</span>
+                                    <div class="text-muted" style="font-size:0.75rem;">
+                                        <i class="bi bi-clock me-1"></i>{{ comentario.fecha_creacion|date:"d/m/Y H:i" }}
+                                    </div>
+                                </div>
+                            </div>
+                            {% if user.is_authenticated %}
+                            {% if user == comentario.autor or user.perfil.es_administrador %}
+                            <form method="post" action="/comentarios/comentario/{{ comentario.pk }}/eliminar/" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm text-danger" title="Eliminar comentario"
+                                    onclick="return confirm('¿Eliminar este comentario?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                        <p class="mb-2" style="font-size:0.95rem;">{{ comentario.contenido }}</p>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if user.is_authenticated %}
+                            <form method="post" action="/comentarios/comentario/{{ comentario.pk }}/like/" class="like-form">
+                                {% csrf_token %}
+                                <button type="submit" class="like-btn {% if comentario.pk in likes_usuario %}liked{% endif %}">
+                                    <i class="bi bi-heart{% if comentario.pk in likes_usuario %}-fill{% endif %} me-1"></i>
+                                    <span class="like-count">{{ comentario.total_likes }}</span>
+                                    {% if comentario.pk in likes_usuario %}Me gusta{% else %}Me gusta{% endif %}
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="like-btn">
+                                <i class="bi bi-heart me-1"></i>{{ comentario.total_likes }} Me gusta
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-state" style="padding: 2rem;">
+                        <i class="bi bi-chat text-muted d-block" style="font-size:2.5rem;"></i>
+                        <p class="text-muted mt-2 mb-0">Aún no hay comentarios. ¡Sé el primero en comentar!</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-info-circle me-2 text-primary"></i>Información
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0 small">
+                        <dt class="col-5 text-muted">Gravedad</dt>
+                        <dd class="col-7">
+                            <span class="badge badge-gravedad-{{ accidente.gravedad }}">
+                                {{ accidente.get_gravedad_display }}
+                            </span>
+                        </dd>
+                        <dt class="col-5 text-muted">Fecha</dt>
+                        <dd class="col-7 fw-semibold">{{ accidente.fecha|date:"d/m/Y" }}</dd>
+                        <dt class="col-5 text-muted">Hora</dt>
+                        <dd class="col-7 fw-semibold">{{ accidente.fecha|date:"H:i" }}</dd>
+                        <dt class="col-5 text-muted">Reportado por</dt>
+                        <dd class="col-7 fw-semibold">{{ accidente.reportado_por.get_full_name|default:accidente.reportado_por.username|default:"Anónimo" }}</dd>
+                        <dt class="col-5 text-muted">Registrado</dt>
+                        <dd class="col-7 fw-semibold">{{ accidente.fecha_registro|date:"d/m/Y" }}</dd>
+                        <dt class="col-5 text-muted">Comentarios</dt>
+                        <dd class="col-7 fw-semibold">{{ accidente.comentarios.count }}</dd>
+                    </dl>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-geo-alt me-2 text-danger"></i>Ubicación
+                </div>
+                <div class="card-body">
+                    <p class="fw-semibold mb-0">{{ accidente.ubicacion }}</p>
+                </div>
+            </div>
+            <a href="/" class="btn btn-outline-primary w-100 mt-3">
+                <i class="bi bi-arrow-left me-2"></i>Volver al Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.like-form').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const btn = this.querySelector('.like-btn');
+        const countEl = this.querySelector('.like-count');
+        const csrfToken = this.querySelector('[name=csrfmiddlewaretoken]').value;
+        const url = this.action;
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            countEl.textContent = data.total;
+            const icon = btn.querySelector('i');
+            if (data.accion === 'agregado') {
+                btn.classList.add('liked');
+                icon.className = 'bi bi-heart-fill me-1';
+            } else {
+                btn.classList.remove('liked');
+                icon.className = 'bi bi-heart me-1';
+            }
+        })
+        .catch(() => { form.submit(); });
+    });
+});
+</script>
+{% endblock %}

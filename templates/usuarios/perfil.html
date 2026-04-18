@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Mi Perfil - Vías Seguras{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="container">
+        <h1 class="fw-bold"><i class="bi bi-person-circle me-3"></i>Mi Perfil</h1>
+        <p class="mb-0 opacity-75">Información de tu cuenta en Vías Seguras</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card text-center p-4">
+                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width:80px;height:80px;font-size:2rem;font-weight:700;">
+                    {{ usuario.first_name|first|upper|default:usuario.username|first|upper }}
+                </div>
+                <h4 class="fw-bold">{{ usuario.get_full_name|default:usuario.username }}</h4>
+                <p class="text-muted">@{{ usuario.username }}</p>
+                {% if usuario.perfil %}
+                <span class="badge {% if usuario.perfil.rol == 'administrador' %}bg-danger{% else %}bg-primary{% endif %} px-3 py-2">
+                    <i class="bi {% if usuario.perfil.rol == 'administrador' %}bi-shield-fill{% else %}bi-person-fill{% endif %} me-1"></i>
+                    {{ usuario.perfil.get_rol_display }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-info-circle me-2"></i>Información de la cuenta
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th class="text-muted" style="width:40%"><i class="bi bi-person me-2"></i>Nombre</th>
+                            <td class="fw-semibold">{{ usuario.get_full_name|default:"No especificado" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted"><i class="bi bi-at me-2"></i>Usuario</th>
+                            <td class="fw-semibold">{{ usuario.username }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted"><i class="bi bi-envelope me-2"></i>Correo</th>
+                            <td class="fw-semibold">{{ usuario.email }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted"><i class="bi bi-calendar me-2"></i>Miembro desde</th>
+                            <td class="fw-semibold">{{ usuario.date_joined|date:"d/m/Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th class="text-muted"><i class="bi bi-activity me-2"></i>Último acceso</th>
+                            <td class="fw-semibold">{{ usuario.last_login|date:"d/m/Y H:i"|default:"No disponible" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-bar-chart me-2 text-primary"></i>Mis actividades</h6>
+                    <div class="row text-center g-3">
+                        <div class="col-4">
+                            <div class="bg-light rounded-3 p-3">
+                                <div class="fw-bold fs-4 text-primary">{{ usuario.accidentes.count }}</div>
+                                <div class="small text-muted">Accidentes reportados</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="bg-light rounded-3 p-3">
+                                <div class="fw-bold fs-4 text-success">{{ usuario.comentarios.count }}</div>
+                                <div class="small text-muted">Comentarios</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="bg-light rounded-3 p-3">
+                                <div class="fw-bold fs-4 text-warning">{{ usuario.likes.count }}</div>
+                                <div class="small text-muted">Likes dados</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
