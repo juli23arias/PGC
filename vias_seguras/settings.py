@@ -9,7 +9,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', default='your secret key')
 
 DEBUG = 'RENDER' not in os.environ
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['.onrender.com']
 
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
@@ -21,6 +21,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://*.spock.replit.dev',
     'http://localhost:3000',
     'http://0.0.0.0:3000',
+    'https://*.onrender.com'
 ]
 
 INSTALLED_APPS = [
