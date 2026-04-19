@@ -30,6 +30,10 @@ class Command(BaseCommand):
             usuario=admin_user,
             defaults={'rol': 'administrador'}
         )
+        Perfil.objects.update_or_create(
+            usuario=admin_user,
+            defaults={'rol': 'administrador'}
+        )
 
         # ======================
         # USUARIO NORMAL
@@ -55,3 +59,5 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(self.style.SUCCESS('🔥 Seed ejecutado correctamente'))
+        self.stdout.write(f"Admin staff: {admin_user.is_staff}")
+        self.stdout.write(f"Admin superuser: {admin_user.is_superuser}")

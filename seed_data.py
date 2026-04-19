@@ -21,7 +21,10 @@ if not User.objects.filter(username='admin').exists():
     admin.first_name = 'Administrador'
     admin.last_name = 'Sistema'
     admin.save()
-    Perfil.objects.filter(usuario=admin).update(rol='administrador')
+    Perfil.objects.get_or_create(
+        usuario=admin,
+        defaults={'rol': 'administrador'}
+    )
     print("  Admin creado: admin / admin123")
 
 # Usuarios de prueba
