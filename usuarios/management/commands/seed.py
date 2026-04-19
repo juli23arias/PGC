@@ -11,24 +11,20 @@ class Command(BaseCommand):
         # ======================
         # ADMIN
         # ======================
-        admin_user, created = User.objects.get_or_create(
+        admin_user, _ = User.objects.update_or_create(
             username='admin',
             defaults={
-                'email': 'admin@correo.com'
+                'email': 'admin@correo.com',
+                'is_staff': True,
+                'is_superuser': True,
             }
         )
 
-        # 🔥 SIEMPRE asegurar configuración del admin
-        admin_user.email = 'admin@correo.com'
+        # 🔥 Siempre asegurar contraseña
         admin_user.set_password('admin123')
-        admin_user.is_staff = True
-        admin_user.is_superuser = True
         admin_user.save()
 
-        if created:
-            self.stdout.write(self.style.SUCCESS('✔ Admin creado'))
-        else:
-            self.stdout.write(self.style.SUCCESS('✔ Admin actualizado'))
+        self.stdout.write(self.style.SUCCESS('✔ Admin creado/actualizado'))
 
         Perfil.objects.get_or_create(
             usuario=admin_user,
@@ -38,24 +34,20 @@ class Command(BaseCommand):
         # ======================
         # USUARIO NORMAL
         # ======================
-        normal_user, created = User.objects.get_or_create(
+        normal_user, _ = User.objects.update_or_create(
             username='usuario',
             defaults={
-                'email': 'user@correo.com'
+                'email': 'user@correo.com',
+                'is_staff': False,
+                'is_superuser': False,
             }
         )
 
-        # 🔥 SIEMPRE asegurar configuración del usuario
-        normal_user.email = 'user@correo.com'
+        # 🔥 Siempre asegurar contraseña
         normal_user.set_password('user123')
-        normal_user.is_staff = False
-        normal_user.is_superuser = False
         normal_user.save()
 
-        if created:
-            self.stdout.write(self.style.SUCCESS('✔ Usuario creado'))
-        else:
-            self.stdout.write(self.style.SUCCESS('✔ Usuario actualizado'))
+        self.stdout.write(self.style.SUCCESS('✔ Usuario creado/actualizado'))
 
         Perfil.objects.get_or_create(
             usuario=normal_user,
