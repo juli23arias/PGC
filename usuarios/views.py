@@ -30,9 +30,7 @@ def requiere_admin(request):
 # Autenticación
 # ──────────────────────────────────────────────────────────────
 
-def debug_admin(request):
-    u = User.objects.get(username='admin')
-    return HttpResponse(f"is_staff={u.is_staff}, is_superuser={u.is_superuser}")
+
 
 def registro(request):
     if request.user.is_authenticated:

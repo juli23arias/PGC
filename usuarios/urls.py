@@ -14,5 +14,5 @@ urlpatterns = [
     path('gestion/crear/', views.crear_usuario, name='crear_usuario'),
     path('gestion/<int:pk>/editar/', views.editar_usuario, name='editar_usuario'),
     path('gestion/<int:pk>/eliminar/', views.eliminar_usuario, name='eliminar_usuario'),
-    path('debug-admin/', debug_admin),
+    
 ]
