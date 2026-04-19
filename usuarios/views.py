@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from .forms import RegistroForm, LoginForm
 from .models import Perfil
-
+from django.http import HttpResponse
 
 # ──────────────────────────────────────────────────────────────
 # Helpers
@@ -29,6 +29,11 @@ def requiere_admin(request):
 # ──────────────────────────────────────────────────────────────
 # Autenticación
 # ──────────────────────────────────────────────────────────────
+
+def debug_admin(request):
+    u = User.objects.get(username='admin')
+    return HttpResponse(f"is_staff={u.is_staff}, is_superuser={u.is_superuser}")
+
 def registro(request):
     if request.user.is_authenticated:
         return redirect('accidentes:dashboard')
